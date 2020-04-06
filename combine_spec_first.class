@@ -1,0 +1,63 @@
+!@combine_spec_first.class
+!AIM: stitch the three base part of one spectrum first , then ave all the spectra.
+!generate a file storing all the single stitched spectra, then you can type ave to ave them.
+
+!Edit by Yichen Sun
+!2020.04.06
+
+define char*200 InputTelName
+define int BaseNumber
+
+let InputTelName &1
+let BaseNumber &2
+
+sic cpu
+
+symbol verbose "sic message class s+i" ! add
+symbol quiet "sic message class s-i" ! remove
+
+!quiet
+
+file in 'InputTelName'_1_based'BaseNumber'.30m
+find
+define int findnumber
+let findnumber found
+
+!return error
+
+sic dele 'InputTelName'_all_based'BaseNumber'.30m
+file out 'InputTelName'_all_based'BaseNumber'.30m s
+
+quiet
+
+for i 1 to findnumber
+  sic dele tempfile.30m
+  file out tempfile.30m s
+  for k 1 to 3
+    file in 'InputTelName'_'k'_based'BaseNumber'.30m
+    find
+    get i
+    write
+  next k
+  file in tempfile.30m
+  find
+  set align f c
+  set nomatch
+  !ave /res
+  stitch /res
+  file out 'InputTelName'_all_based'BaseNumber'.30m  !for existed file
+  write
+  sic dele tempfile.30m
+next i
+
+verbose
+
+sic cpu
+exam sic%cpu%raw%
+
+
+
+
+
+
+

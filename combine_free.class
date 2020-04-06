@@ -1,0 +1,42 @@
+!combine_free.class
+!AIM: combine two ave spec more freely, e.g. combine V and H to one spectrum.
+
+!Edit by Yichen Sun
+!20200406
+!---------------
+
+define char*200 OutputFileName
+define char*200 FileName1
+define char*200 FileName2
+
+let OutputFilename &1
+let FileName1 &2
+let FileName2 &3
+
+sic dele templist.30m
+file out templist.30m s
+
+file in 'FileName1'.30m 
+find
+get 1
+write 
+
+file in 'FileName2'.30m
+find
+get 1
+write
+
+file in templist.30m
+find
+ave /res
+
+file out 'OutputFileName'.30m s
+write 1
+
+!sic dele templist.30m
+
+file in 'OutputFileName'.30m
+get 1
+pl
+
+

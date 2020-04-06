@@ -1,0 +1,57 @@
+!@extract_source.class
+
+!AIM: extract the whole spectra into three parts to avoid platforming effect partly.
+
+!NOTE: you should input the whole path of the file InputSourceFile if it is not in the local directory.
+
+!Edit by Yichen Sun
+!20200406
+!----------------------------------------------------------------
+
+define char*200 InputSourceFile
+define char InputTel*100 
+define char FileName*100
+
+say "Input the SourceFile"
+let InputSourceFile &1
+say "Input the Telescope Name"
+let InputTel &2
+say "Input the Output File Name"
+let FileName &3
+
+file in 'InputSourceFile'
+
+find /tel 'InputTel' 
+
+sic dele 'FileName'_1.30m 
+file out 'FileName'_1.30m s
+
+for i 1 to found
+get next
+extract 13825 20737 c
+write 
+next
+
+sic dele 'FileName'_2.30m
+file out 'FileName'_2.30m s
+
+find /tel 'InputTel'
+
+for i 1 to found
+get next
+extract 6913 13824 c
+write
+next
+
+sic dele 'FileName'_3.30m
+file out 'FileName'_3.30m s
+
+find /tel 'InputTel'
+
+for i 1 to found
+get next
+extract 1 6912 c
+write
+next
+
+

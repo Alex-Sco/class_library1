@@ -1,0 +1,36 @@
+!combine_ave.class
+!AIM: to combine ave spectra of the three parts of one tel spectra extracted by @extract_source .
+
+!!Note: cannot be used in condition of rest freq change(described in detail in @divide_freq_change)
+
+define char*100 InputTelName
+define int BaseNumber
+
+let InputTelName &1
+let BaseNumber &2
+
+
+sic dele 'InputTelName'_all_ave_list_based'BaseNumber'.30m
+file out 'InputTelName'_all_ave_list_based'BaseNumber'.30m s
+
+for i 1 to 3
+  file in 'InputTelName'_'i'_ave_based'BaseNumber'.30m
+  find
+  get 1
+  write
+next i
+
+file in 'InputTelName'_all_ave_list_based'BaseNumber'.30m
+find
+set align f c
+set nomatch
+ave /res
+sic dele 'InputTelName'_all_ave_based'BaseNumber'.30m
+file out 'InputTelName'_all_ave_based'BaseNumber'.30m s
+write
+
+
+file in 'InputTelName'_all_ave_based'BaseNumber'.30m
+get 1
+pl
+

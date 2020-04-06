@@ -1,0 +1,114 @@
+!!------------------------------------------------
+
+!!the program aims to identify lines with the tool go browse(by using the program @identify_browse, which is modified by p_browse.class), and do some output. 
+!!It can create a specified directory and two .dat files. One for certainly identified lines and another for uncertain lines. 
+!!The .dat file can be lately used to fitting by another program @fitting_batchprogram. 
+!!you can skip the mkdir process if you have had the certain directory and the two .dat files.
+
+!!require: a formally_named ave spectra file. Can be created by @combine_ave, @combine_ave_2 and @combine_free.
+
+!!some problems:
+!!the using sigma is base sigma by cannel but not area sigma, may be less precise.
+!!the value of the sigma will be change every time you used.
+!!set mo x is not convenient
+
+!!note: the program @identify_browse should be in the same dir of this program.
+!!Warning: if there is a bug and the procedure ends halfway, remenber to dele those global vars. 
+
+!!Edit by Yichen Sun
+!!2020.03.06
+!!2020.04.06(check)
+!!------------------------------------------------
+
+!!parameters define
+
+define char*200 InputTel /global   !define global for latter @identify_brouse use, note the var name should be the same in this two procedure!!
+define int BasedNumber
+define double BaseSigma /global
+
+let InputTel &1
+let BasedNumber &2
+!!!
+
+!!mkdir to store the two .dat files
+
+begin procedure mkteldir-to-stored-lines
+  sic mkdir 'InputTel'
+  sic dir 'InputTel'
+  sic output 'InputTel'_lines.dat new
+  sic output
+  sic output 'InputTel'_uncertain_lines.dat new
+  sic output
+  sic dir ..
+end procedure mkteldir-to-stored-lines
+
+say "Is there a directory existing? (typein y or n)"  !to check if there is a dir or not (I don't know how to check it automatically yet)
+define char*100 typein
+let typein &3
+if ((typein.eq."y").or.(typein.eq."Y")) then
+   continue
+else if ((typein.eq."n").or.(typein.eq."N")) then
+   @ mkteldir-to-stored-lines
+else
+   say "Wrong Input!"
+   return error
+endif
+dele /var typein
+!!!
+
+!!load the spectra file and do identifying process
+
+file in 'InputTel'_all_ave_based'BasedNumber'.30m
+find
+get 1
+set unit f v
+set mo x t
+set mo y t
+pl
+
+say "set mo x?(typein = y or n)"  !!sometimes different parts have significantly different sigma, can use set mo x to change range
+define char*100 typein
+let typein &3
+
+if ((typein.eq."n").or.(typein.eq."N")) then
+   continue
+else if ((typein.eq."y").or.(typein.eq."Y")) then
+   set mo x
+   pl
+else 
+   say "Wrong Input!"
+   return error
+endif   
+dele /var typein  
+
+say "Now set win"  !!set win for base
+set win
+
+base /pl   !!base and 1 second check
+sic wait 1
+let BaseSigma R%HEAD%BAS%SIGFI
+
+
+say "*******"
+say "the 3sigma value is :" '3*BaseSigma'
+say "the 4sigma value is :" '4*BaseSigma'
+say "*******"
+
+exam BaseSigma
+
+!@identify_browse.class      !using those functions added in the @identify_browse 
+iden_brow   !after I init the class by myself using @class_init
+exam BaseSigma
+
+dele /var InputTel   !!because these two para are global. if not dele, it may be error for next use
+dele /var BaseSigma
+
+  
+!say "Hey ~ Brother! There's an endless road to rediscover~"
+
+
+!set mo x t
+!set mo y t
+
+
+

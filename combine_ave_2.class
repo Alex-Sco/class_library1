@@ -1,0 +1,67 @@
+!combine_ave_2.class
+!for some data divided into two parts because of the frequency change and divided by @divide_freq_change.class
+!AIM: to combine those three parts by channel and get whole spectra
+
+!Edit by Yichen Sun
+!20200406
+!--------------------------------
+
+define char*100 InputTelName
+define int BaseNumber
+
+
+let InputTelName &1
+let BaseNumber &2
+
+
+set bad and  
+!!to avoid the disappear of superposed data while default is set bad or.
+
+
+for i 1 to 3 
+  sic dele 'InputTelName'_'i'_ave_list_based'BaseNumber'.30m
+  file out 'InputTelName'_'i'_ave_list_based'BaseNumber'.30m s
+  for j 1 to 2
+    file in 'InputTelName'_'i'_'j'_ave_based'BaseNumber'.30m  
+    find
+    get 1
+    write
+  next j
+next i
+
+for i 1 to 3
+  sic dele 'InputTelName'_'i'_ave_based'BaseNumber'.30m
+  file out 'InputTelName'_'i'_ave_based'BaseNumber'.30m s
+  file in 'InputTelName'_'i'_ave_list_based'BaseNumber'.30m 
+  find
+  set align f c
+  ave /res
+  write
+next i
+
+
+!!!!!
+sic dele 'InputTelName'_all_ave_list_based'BaseNumber'.30m
+file out 'InputTelName'_all_ave_list_based'BaseNumber'.30m s
+
+for i 1 to 3
+  file in 'InputTelName'_'i'_ave_based'BaseNumber'.30m
+  find
+  get 1
+  write
+next i
+
+file in 'InputTelName'_all_ave_list_based'BaseNumber'.30m
+find
+set align f c
+set nomatch
+ave /res
+sic dele 'InputTelName'_all_ave_based'BaseNumber'.30m
+file out 'InputTelName'_all_ave_based'BaseNumber'.30m s
+write
+
+
+file in 'InputTelName'_all_ave_based'BaseNumber'.30m
+get 1
+pl
+

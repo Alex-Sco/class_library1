@@ -1,0 +1,691 @@
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! BROWSE utility for large band spectra (actually when Nchan > Npixels
+! on the plotting window).
+!
+! S.Bardeau & J.Pety 2010-2011
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+!modified by Yichen Sun
+!Add function: output identified lines information in a dat.file (including certain &uncertain lines)
+!Add function: show base sigma(can only used after a base, e.g. in @identify)
+!
+!2020.04.06
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! Optimization: only define things if not already done
+if (exist(p_browse)) then
+  @ browse-check-spectrum
+  @ browse-check-xunit
+  @ browse-line-init
+  @ browse-compute-significant
+  @ browse-usage
+  @ browse-loop
+  return
+endif
+!
+! Sanity checks
+!
+begin procedure browse-check-spectrum
+  if (.not.exist(rx)) then
+     message e browse "No R spectrum in memory"
+     return base
+  endif
+end procedure browse-check-spectrum
+!
+begin procedure browse-check-xunit
+  if (set%las%unit[1].eq."F") then
+     let p_browse%xoffset r%head%spe%restf
+  else if (set%las%unit[1].eq."I") then
+     let p_browse%xoffset r%head%spe%image
+  else
+     let p_browse%xoffset 0.d0
+  endif
+end procedure browse-check-xunit
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! Definitions and defaults
+!
+begin procedure browse-define
+  if (.not.exist(p_browse)) then
+     define structure p_browse /global
+     define double p_browse%xcenter p_browse%xwidth p_browse%xoffset /global
+     !
+     define structure p_browse%full /global
+     define real p_browse%full%xmin p_browse%full%xmax /global
+     define real p_browse%full%ymin p_browse%full%ymax /global
+     !
+     define structure p_browse%zoom /like p_browse%full /global
+     !
+     define structure p_browse%line /global
+     define character p_browse%line%cat*256 p_browse%line%cur*256 /global
+     define integer p_browse%line%n /global
+     define logical p_browse%line%frequnit /global
+     !
+     define structure p_browse%status /global
+     define integer p_browse%status%detected p_browse%status%doubtful p_browse%status%undetected /global
+     define integer p_browse%status%unknown p_browse%status%last /global
+     !
+     let p_browse%status%unknown 1
+     let p_browse%status%undetected 2
+     let p_browse%status%doubtful 3
+     let p_browse%status%detected 4
+     let p_browse%status%last 4
+     !
+     define character p_browse%status%name*12[p_browse%status%last] /global
+     let p_browse%status%name "unknown" "undetected" "doubtful" "detected"
+     !
+     @ browse-defaults
+  endif
+end procedure browse-define
+!
+begin procedure browse-default-xwidth
+  if (browse%width.ne.0) then
+     let p_browse%xwidth browse%width
+  else
+     let p_browse%xwidth  abs(rx[channels]-rx[1])/8.
+  endif
+end procedure browse-default-xwidth
+!
+begin procedure browse-default-xcenter
+  if (browse%center.ne.0) then
+     if (set%las%unit[1].eq."F") then
+        let p_browse%xcenter browse%center-r%head%spe%restf
+     else if (set%las%unit[1].eq."I") then
+        let p_browse%xcenter browse%center-r%head%spe%image
+     else
+        let p_browse%xcenter browse%center
+     endif
+  else
+     let p_browse%xcenter (rx[channels]+rx[1])/2.
+  endif
+end procedure browse-default-xcenter
+!
+begin procedure browse-default-catalogs
+  let p_browse%line%cur "detections.dat"
+  let p_browse%line%cat ""  ! i.e. use ASTRO catalog
+end procedure browse-default-catalogs
+!
+begin procedure browse-defaults
+  !
+  ! Box positions
+  let p_browse%full%xmin 0.10*page_x
+  let p_browse%full%xmax 0.90*page_x
+  let p_browse%full%ymin 0.10*page_y
+  let p_browse%full%ymax 0.30*page_y
+  let p_browse%zoom%xmin 0.10*page_x
+  let p_browse%zoom%xmax 0.90*page_x
+  let p_browse%zoom%ymin 0.425*page_y
+  let p_browse%zoom%ymax 0.75*page_y
+  !
+  @ browse-default-xwidth
+  @ browse-default-xcenter
+  @ browse-default-catalogs
+  !
+end procedure browse-defaults
+!
+begin procedure browse-compute-significant
+  if ((.not.exist(rmedian)).or.(.not.exist(rsigma))) then
+     return
+  endif
+  !
+  if exist(p_browse%sign) then
+     delete /var p_browse%sign
+  endif
+  define structure p_browse%sign /global
+  define integer p_browse%sign%nsnr /global
+  let p_browse%sign%nsnr 2
+  define integer p_browse%sign%snr[p_browse%sign%nsnr] /global
+  define real p_browse%sign%y[rsigma%nchan,p_browse%sign%nsnr,2] /global
+  define double p_browse%sign%x[rsigma%nchan] /global
+  define real p_browse%sign%bad /global
+  !
+  let p_browse%sign%snr 3 5
+  let p_browse%sign%bad rsigma%bad
+  let p_browse%sign%x rsigma%x
+  let p_browse%sign%y p_browse%sign%bad
+  define real snr[p_browse%sign%nsnr]
+  for isign 1 to 2
+     if (isign.eq.1) then
+        let snr -p_browse%sign%snr
+     else
+        let snr +p_browse%sign%snr
+     endif
+     for isnr 1 to p_browse%sign%nsnr
+       let p_browse%sign%y[isnr,isign] rmedian%y+snr[isnr]*rsigma%y /where (abs(rmedian%y-rmedian%bad).gt.0).and.abs(rsigma%y-rsigma%bad).gt.0
+     next isnr
+  next isign
+end procedure browse-compute-significant
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! Line catalog reading and display
+!
+begin procedure browse-line-reset-structure
+  let p_browse%line%frequnit yes
+  let p_browse%line%n 0
+  if exist(p_browse%line%name) then
+     delete /var p_browse%line%name
+  endif
+  if exist(p_browse%line%fres) then
+     delete /var p_browse%line%fres
+  endif
+  if exist(p_browse%line%status) then
+     delete /var p_browse%line%status
+  endif
+end procedure browse-line-reset-structure
+!
+begin procedure browse-line-check-unit
+  if ((set%las%unit[1].ne."F").and.(set%las%unit[1].ne."I")) then
+     message w browse "Abscissa unit is not frequency => Can not annotate the line names"
+     let p_browse%line%frequnit no
+  endif
+end procedure browse-line-check-unit
+!
+begin procedure browse-line-select-catalog
+  if (browse%cat.ne." ") then
+     let p_browse%line%cat 'browse%cat'  ! Custom user catalog
+  else
+     let p_browse%line%cat ""  ! i.e. use ASTRO catalog
+  endif
+end procedure browse-line-select-catalog
+!
+begin procedure browse-line-read-catalog
+  ! *** JP Catalog should be read only when different from previous
+  !     call (maybe in the catalog command...)
+!!$  if file(p_browse%line%cur) then
+!!$     las\catalog 'p_browse%line%cur' /status
+!!$  else
+     if (p_browse%line%cat.eq." ") then
+        las\catalog
+     else
+        las\catalog 'p_browse%line%cat'
+     endif
+!!$  endif
+end procedure browse-line-read-catalog
+!
+begin procedure browse-line-select-subset
+  if .not.exist(class%line) then
+     message e browse "Run the CATALOG command first"
+     return base
+  endif
+  ! Get frequency range
+  define structure frange
+  define double frange%corr[2] frange%rest[2]
+  define integer frange%loc[2]
+  let frange%corr min(rx[1],rx[channels]) max(rx[1],rx[channels])
+  let frange%rest (frange%corr+frequency)/1000 ! From MHz to GHz
+  define integer loc[2]
+  compute loc location class%line%freq frange%rest[1]
+  let frange%loc[1] loc[2]
+  compute loc location class%line%freq frange%rest[2]
+  let frange%loc[2] loc[1]
+  ! Sanity check
+  define integer nlines
+  if ((frange%loc[1].eq.0).or.(frange%loc[2].eq.0)) then
+     let nlines 0
+  else
+     let nlines frange%loc[2]-frange%loc[1]+1
+  endif
+  if (nlines.le.0) then
+     message e browse "No line in the spectrum frequency range in "'p_browse%line%cat'
+     let p_browse%line%n 0
+     return
+  endif
+  ! Fill the structure
+  let p_browse%line%n nlines
+  define integer p_browse%line%status[nlines] /global
+  define double p_browse%line%fres[nlines] /global
+  define character p_browse%line%name*24[nlines] /global
+  define integer jline
+  let jline 0
+  for iline frange%loc[1] to frange%loc[2]
+     let jline jline+1
+     let p_browse%line%fres[jline] 'class%line%freq[iline]*1000' ! From GHz to MHz
+     let p_browse%line%name[jline] 'class%line%name[iline]'
+     let p_browse%line%status[jline] 'class%line%status[iline]'
+  next iline
+end procedure browse-line-select-subset
+!
+begin procedure browse-line-init
+  @ browse-line-reset-structure
+  @ browse-line-check-unit
+  if (p_browse%line%frequnit) then
+     @ browse-line-select-catalog
+     @ browse-line-read-catalog
+     @ browse-line-select-subset
+  endif
+end procedure browse-line-init
+!
+begin procedure browse-line-annotate-legend
+  if (p_browse%line%n.gt.0) then
+     for istatus 1 to p_browse%status%last
+        pen 'istatus'
+        g\draw text '(istatus-2.5)*7' 2 'p_browse%status%name[istatus]' 5 0 /char 8
+     next istatus
+     pen 0
+  endif
+end procedure browse-line-annotate-legend
+
+begin procedure browse-line-annotate-single
+  ! *** JP I would use DRAW MOLECULE if it was more flexible.
+  define double ypos
+  let ypos user_ymin+0.95*(user_ymax-user_ymin)
+  pen 'p_browse%line%status[&1]'
+  g\draw text 'p_browse%line%fres[&1]-frequency' ypos 'p_browse%line%name[&1]' 4 90 /user
+  pen 0
+end procedure browse-line-annotate-single
+!
+begin procedure browse-line-annotate-multi
+  ! *** JP I would use DRAW MOLECULE if it was more flexible.
+  define double ypos
+  let ypos user_ymin+0.95*(user_ymax-user_ymin)
+  for iline 1 to p_browse%line%n
+     pen 'p_browse%line%status[iline]'
+     g\draw text 'p_browse%line%fres[iline]-frequency' ypos 'p_browse%line%name[iline]' 4 90 /user
+  next iline
+  pen 0
+end procedure browse-line-annotate-multi
+!
+begin procedure browse-line-color-spectrum
+  set var spectro
+  define double ty /like ry
+  define integer ifreq ifirst ilast
+  let ty ry
+  for istatus 1 to p_browse%status%last
+     let ry bad
+     pen 'istatus'
+     for iline 1 to p_browse%line%n
+        if (p_browse%line%status[iline].eq.istatus) then
+           let ifreq 'nint((p_browse%line%fres[iline]-restf)/fres + rchan)'
+           let ifirst max(ifreq-3,1)
+           let ilast min(ifreq+3,nchan)
+           let ry[ifirst:ilast] ty[ifirst:ilast]
+        endif
+     next iline
+     spectrum
+  next istatus
+  let ry ty
+  pen 0
+end procedure browse-line-color-spectrum
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+begin procedure browse-line-cur-write
+  if (p_browse%line%n.gt.0) then
+     sic output 'p_browse%line%cur'
+        say "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        say "!"
+        for iline 1 to p_browse%line%n
+           say 'p_browse%line%fres[iline]/1000' "'"'p_browse%line%name[iline]'"'" -
+               'p_browse%line%status[iline]' -
+               /format f15.8 a18 i2
+        next iline
+        say "!"
+        say "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+     sic output
+  endif
+end procedure browse-line-cur-write
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! Actions and plots
+!
+begin procedure browse-line-id
+  if (p_browse%line%n.le.0) then
+     return
+  endif
+  g\change directory zoom
+  ! Get cursor frequency
+  greg1\draw relo * *
+  define double fres
+  let fres use_curs[1]+p_browse%xoffset
+  ! Get closest catalog line
+  define integer loc[2] iline
+  compute loc location p_browse%line%fres fres
+  if (abs(p_browse%line%fres['loc[1]']-fres).le.abs(p_browse%line%fres['loc[2]']-fres)) then
+     let iline loc[1]
+  else
+     let iline loc[2]
+  endif
+  ! Change line status
+  let p_browse%line%status[iline] 1+mod(p_browse%line%status[iline],p_browse%status%last)
+  @ browse-line-annotate-single 'iline'
+  g\change directory
+end procedure browse-line-id
+!
+begin procedure browse-display-value
+  g\change directory zoom
+  greg1\draw relo * *
+  if (set%las%unit[1].eq."V") then
+     say "   Velocity            : " 'use_curs[1]' " km/s" /format a 1pg19.12 a
+  else if (set%las%unit[1].eq."F") then
+     say "   Rest Frequency      : " 'r%head%spe%restf+use_curs[1]' " MHz" /format a 1pg19.12 a
+  else if (set%las%unit[1].eq."I") then
+     say "   Image Frequency     : " 'r%head%spe%image+use_curs[1]' " MHz" /format a 1pg19.12 a
+  else if (set%las%unit[1].eq."C") then
+     say "   Channel number      : " 'use_curs[1]' /format a 1pg19.12
+  else
+     message e browse "Unknown abscissa unit: "'set%las%unit[1]'
+  endif
+  say "   Antenna Temperature : " 'use_curs[2]' " K" /format a 1pg19.12 a
+  g\change directory
+end procedure browse-display-value
+!
+begin procedure browse-set-xcenter
+  if (phy_curs[2].gt.p_browse%zoom%ymin) then
+     g\change directory zoom
+     let p_browse%xcenter (phy_curs[1]-p_browse%zoom%xmin)*(user_xmax-user_xmin)/(p_browse%zoom%xmax-p_browse%zoom%xmin)+user_xmin
+     g\change directory
+  else
+     g\change directory full
+     let p_browse%xcenter (phy_curs[1]-p_browse%full%xmin)*(user_xmax-user_xmin)/(p_browse%full%xmax-p_browse%full%xmin)+user_xmin
+     g\change directory
+  endif
+end procedure browse-set-xcenter
+!
+begin procedure browse-shift-xcenter
+  define double fmin fmax
+  let p_browse%xcenter p_browse%xcenter&10.5*p_browse%xwidth
+  let fmin min(rx[1],rx[channels])
+  let fmax max(rx[1],rx[channels])
+  if (p_browse%xcenter.gt.fmax) then
+     let p_browse%xcenter fmin
+  else if (p_browse%xcenter.lt.fmin) then
+     let p_browse%xcenter fmax
+  endif
+end procedure browse-shift-xcenter
+!
+begin procedure browse-plot-baseline-spectrum
+  if (.not.exist(rmedian)) then
+     return
+  endif
+  pen 1
+  g\histo rmedian%x rmedian%y /blank rmedian%bad 0
+  pen 0
+end procedure browse-plot-baseline-spectrum
+!
+begin procedure browse-plot-significant-spectrum
+  if ((.not.exist(rmedian)).or.(.not.exist(rsigma)).or.(.not.exist(p_browse%sign))) then
+     return
+  endif
+  for isign 1 to 2
+     for isnr 1 to p_browse%sign%nsnr
+        pen 'isnr'
+        g\histo p_browse%sign%x p_browse%sign%y[isnr,isign] /blank p_browse%sign%bad 0
+     next isnr
+  next isign
+  pen 0
+end procedure browse-plot-significant-spectrum
+!
+begin procedure browse-plot-full-spectrum
+  gtvl\create directory full
+  gtvl\change directory full
+  greg\set box_location -
+    'p_browse%full%xmin' 'p_browse%full%xmax' 'p_browse%full%ymin' 'p_browse%full%ymax'
+  !
+  set mode x tot
+  ! set mode y: it is user's choice to let the scale automatic or fixed.
+  spectrum
+!  @ browse-line-color-spectrum ! *** JP
+!  @ browse-plot-baseline-spectrum
+!  @ browse-plot-significant-spectrum
+  box
+  title /long
+  !
+  gtvl\change directory ..
+end procedure browse-plot-full-spectrum
+!
+begin procedure browse-plot-zoom-lines
+  ! Draw the red lines representing the zooming range. Segments are
+  ! stored in the ZOOM directory since they have to be cleared and updated
+  ! at each click.
+  !
+  ! Jump to the FULL directory to get its box location in correct units
+  gtvl\change directory FULL
+  !
+  ! Vertical lines representing the range:
+  define real xleft xright ylow yup
+  ! Define in user coordinates
+  let xleft  p_browse%xcenter-p_browse%xwidth
+  let xright p_browse%xcenter+p_browse%xwidth
+  ! Convert to absolute physical coordinates
+  g\draw relocate xleft user_ymin /user
+  let xleft phy_curs[1]
+  let ylow  phy_curs[2]
+  g\draw relocate xright user_ymax /user
+  let xright phy_curs[1]
+  let yup    phy_curs[2]
+  !
+  ! Lines linked to the ZOOM box corners:
+  define real xcornl xcornr ycorn
+  let xcornl p_browse%zoom%xmin  ! In absolute physical coordinates
+  let xcornr p_browse%zoom%xmax
+  let ycorn  p_browse%zoom%ymin
+  !
+  gtvl\change directory ..<ZOOM
+  ! Convert from absolute to relative physical coordinates (as expected
+  ! by G\DRAW without option)
+  let xleft  xleft-box_xmin
+  let xright xright-box_xmin
+  let ylow   ylow-box_ymin
+  let yup    yup-box_ymin
+  let xcornl xcornl-box_xmin
+  let xcornr xcornr-box_xmin
+  let ycorn  ycorn-box_ymin
+  !
+  g\pen 1
+  g\draw relocate xleft  ylow
+  g\draw line     xleft  yup
+  g\draw line     xcornl ycorn
+  g\draw relocate xright ylow
+  g\draw line     xright yup
+  g\draw line     xcornr ycorn
+  g\pen 0
+  !
+  gtvl\change directory ..
+end procedure browse-plot-zoom-lines
+!
+begin procedure browse-plot-zoomed-spectrum
+  gtvl\clear directory zoom
+  gtvl\change directory zoom
+  greg\set box_location -
+    'p_browse%zoom%xmin' 'p_browse%zoom%xmax' 'p_browse%zoom%ymin' 'p_browse%zoom%ymax'
+  !
+  define double xmin xmax
+  let xmin p_browse%xcenter-p_browse%xwidth+p_browse%xoffset
+  let xmax p_browse%xcenter+p_browse%xwidth+p_browse%xoffset
+  set mode x xmin xmax
+  ! set mode y: it is user's choice to let the scale automatic or fixed.
+  spectrum
+  @ browse-plot-baseline-spectrum
+  @ browse-plot-significant-spectrum
+  box
+  @ browse-line-annotate-multi
+  @ browse-line-annotate-legend
+  !
+  gtvl\change directory ..
+end procedure browse-plot-zoomed-spectrum
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+!my own procedure: aim to output identify results in a dat.file in a new dictionary
+!
+!begin procedure mkTeldir-to-stored-lines
+!  define char*100 InputTelName
+!  let InputTelName &1
+!  sic mkdir 'InputTelName'
+!  sic dir 'InputTelName'
+!  sic output 'InputTelName'_lines.dat new
+!  sic output
+!  sic dir ..
+!  dele /var InputTelName  
+!  say "program ending?"
+!end procedure mkTeldir-to-stored-lines
+!
+!!Because of the procedure @identify, the sub procedure above seems redundant(20200306, Yichen Sun)
+!
+!the procedure below aims to output certain identified lines (higher than 4 sigma) to the existing file
+!
+begin procedure output-identified-line-freq
+  
+  say "This is for certainly identified lines!"
+
+  define char*200 LineName
+  define double LineFreq
+  let LineName &1
+  let LineFreq &2
+  
+  sic dir 'InputTel'
+  sic output 'InputTel'_lines.dat append
+  say 'LineFreq' 'LineName'
+  sic output
+  
+  dele /var LineName
+  dele /var LineFreq
+
+  sic dir ..
+  say "program ending"
+
+end procedure output-identified-line-freq
+!
+!the procedure below aims to output uncertain (3 sigma to 4 sigma) lines to another existing file.
+!
+begin procedure output-uncertain-line-freq
+
+  say "This is for uncertain lines!"
+  
+  define char*200 LineName
+  define double LineFreq
+  
+  let LineName &1
+  let LineFreq &2
+
+  sic dir 'InputTel'
+  sic output 'InputTel'_uncertain_lines.dat append
+  say 'LineFreq' 'LineName'
+  sic output
+
+  dele /var LineName
+  dele /var LineFreq
+
+  sic dir ..
+  say "program ending"
+ 
+end procedure output-uncertain-line-freq
+!
+!the procedure below makes sense in the precedure @identify.class, aims to show the base sigma.
+!
+begin procedure show-base-sigma
+  if exist(BaseSigma) then
+    say "*******"
+    say "the 3sigma value is :" '3*BaseSigma'
+    say "the 4sigma value is :" '4*BaseSigma'
+    say "*******"
+  else 
+    say "there is no base yet!"
+  endif
+end procedure show-base-sigma
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! User interface
+!
+begin procedure browse-usage
+  say ""
+  say "Authors: S.Bardeau & J.Pety (2010-2011)"
+  say "Left  clic: Center zoom at cursor location"
+  say "Right clic: Exit"
+  say "Press SPACE key: Center zoom at cursor location"
+  say "Press   Z   key: Zoom at cursor location"
+  say "Press   U   key: Unzoom at cursor location"
+  say "Press   B   key: Reset zoom factor to default"
+  say "Press   D   key: Default zoom width and location"
+  say "Press   V   key: Values at cursor location"
+  say "Press   N   key: Shift forward  the zoom window by half its size"
+  say "Press   P   key: Shift backward the zoom window by half its size"
+  say "Press   Y   key: Zoom Y axis scale (Intensity)"
+  say "Press   T   key: Back to full scale for Y axis"
+  say "Press   L   key: Change color of linenames"
+!  say "Press   M   key: Make a new directory of TelName and make a *_lines.dat file"
+  say "Press   I   key: Output the identified line frequency and name in the existing *_lines.dat file"
+  say "Press   O   key: Output the uncertain line frequency and name in the existing *_uncertain_lines.dat file"
+  say "Press   S   key: show base sigma value before this precedure"
+  say "Press   E   key: Exit loop"
+  say "Press   H   key: Help display"
+  say ""
+  say "Y scales are ruled by the current SET MODE Y value"
+end procedure browse-usage
+!
+begin procedure browse-loop
+  !
+  ! Clear current directory only i.e. do not affect the other plots of the
+  ! user. This also allows several zooms in several windows. It's up
+  ! to the user to decide where to run this procedure.
+  gtvl\clear directory
+  @ browse-plot-full-spectrum
+  gtvl\create directory zoom
+  !
+  for /while yes
+    ! There is only one GTV\CLEAR in the loop to avoid long redrawings. It
+    ! is located in the procedure below:
+    @ browse-plot-zoomed-spectrum
+    @ browse-plot-zoom-lines
+    !
+    ! Next position
+    g\draw relo
+    if ((cursor_code.eq."E").or.(cursor_code.eq."*")) then
+       break
+    else if (cursor_code.eq."H") then
+       @ browse-usage
+    else if (cursor_code.eq."L") then
+       @ browse-line-id
+    else if (cursor_code.eq."V") then
+       @ browse-display-value
+    else if ((cursor_code.eq." ").or.(cursor_code.eq."R")) then
+       @ browse-set-xcenter
+    else if (cursor_code.eq."N") then
+       @ browse-shift-xcenter "+"
+    else if (cursor_code.eq."P") then
+       @ browse-shift-xcenter "-"
+    else if (cursor_code.eq."Z") then
+       let p_browse%xwidth p_browse%xwidth/1.414214
+    else if (cursor_code.eq."U") then
+       let p_browse%xwidth p_browse%xwidth*1.414214
+    else if (cursor_code.eq."B") then
+       @ browse-default-xwidth
+    else if (cursor_code.eq."D") then
+       @ browse-defaults
+!    else if (cursor_code.eq."M") then
+!       @ mkTeldir-to-stored-lines
+    else if (cursor_code.eq."I") then
+       @ output-identified-line-freq
+    else if (cursor_code.eq."O") then
+       @ output-uncertain-line-freq
+    else if (cursor_code.eq."S") then
+       @ show-base-sigma
+    else if (cursor_code.eq."Y") then
+       set mode y
+    else if (cursor_code.eq."T") then
+       set mode y tot
+    else
+       message w browse "Unknown key: "'cursor_code'
+    endif
+  next
+end procedure browse-loop
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+on error "return base"
+@ browse-check-spectrum
+@ browse-define
+@ browse-check-xunit
+@ browse-line-init
+@ browse-compute-significant
+@ browse-usage
+@ browse-loop
+!!$@ browse-line-cur-write
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

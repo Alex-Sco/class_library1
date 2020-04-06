@@ -1,0 +1,45 @@
+!@divide_freq_change.class
+!AIM:for some observation which change the reference frequency and reference velocity, this procedure can divide such data into two parts, each part have the same reference freq and velo
+
+
+!Edit by Yichen Sun 
+!20200406
+!----------------------------------------
+
+define int change_index  
+!'change_index'means the first index which got another frequency setting
+
+
+
+define char inputfilename*100
+
+let inputfilename &1
+let change_index &2
+
+
+file in 'inputfilename'.30m
+find
+
+
+
+sic dele 'inputfilename'_1.30m
+file out 'inputfilename'_1.30m s
+
+for i 1 to 'change_index'-1
+get next
+write 
+next
+
+sic dele 'inputfilename'_2.30m
+file out 'inputfilename'_2.30m s
+
+
+for i 'change_index' to found
+get next
+write
+next
+
+!!!Note: 'get 1 to 39/ get 40 to found' doesn't work(still get 1 to 20 in the result). get next can work. 
+
+
+

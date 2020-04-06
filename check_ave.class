@@ -1,0 +1,46 @@
+!AIM: check the ave spectrum to set windows before do ave by @base_ave.class. You can also do @base_ave.class for two times to achieve this aim. 
+!So this procedure is not necessary.
+
+
+
+!Edit by Yichen Sun
+!20200406
+!---------------------- 
+
+define char InputFileName*100
+define double Freq
+
+
+
+let InputFileName &1
+let Freq &2
+
+file in 'InputFileName'.30m
+find
+
+sic dele 'InputFileName'_test.30m 
+file out 'InputFileName'_test.30m s
+
+for i 1 to found
+    get idx%num[i]
+    modi velo 0
+    modi freq 'Freq'
+    set win 0 0
+    bas
+    write
+next
+
+file in 'InputFileName'_test.30m
+find
+set align f c
+set nomatch
+ave /res
+
+pl
+
+
+
+
+
+
+

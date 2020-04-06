@@ -1,0 +1,61 @@
+!@base_ave_mapping.class
+!AIM: same to @base_ave, mapping data have already had the same velo as the reference strong line's velocity, so we do not need to input the velo of the reference channel.
+!Warning : the condition described above may not always be so. If not, this procedure needs to modify.
+
+
+!Edit by Yichen Sun
+!20200406
+!----------------------------
+
+
+
+
+
+
+define char InputFileName*200
+define int BaseNumber
+define char WindowSet*200
+define double Freq
+
+
+let InputFileName &1
+let BaseNumber &2
+let WindowSet &3
+let Freq &4
+
+file in 'InputFileName'.30m
+find
+set mo x t
+set unit f v
+
+sic dele 'InputFileName'_based'BaseNumber'.30m
+file out 'InputFileName'_based'BaseNumber'.30m s
+
+
+for i 1 to found
+get next
+modi freq 'Freq'
+set win 'WindowSet'
+base 'BaseNumber'
+write
+next
+
+
+file in 'InputFileName'_based'BaseNumber'.30m
+sic dele 'InputFileName'_ave_based'BaseNumber'.30m
+file out 'InputFileName'_ave_based'BaseNumber'.30m s
+
+find
+set align f c
+set nomatch
+ave /res
+write 1
+
+file in 'InputFileName'_ave_based'BaseNumber'.30m
+find
+get 1
+set unit v f
+pl
+
+
+ 

@@ -1,0 +1,268 @@
+!!-----------------------------------------------
+
+!AIM: to using the ave_all spec to do gauss fitting of lines and output results in a specific directory.
+
+
+!Require: three formative ave_based files of one Tel. The three files can be created by the procedure @base_ave.class or @base_ave_mapping.class
+!Require: a .dat file stored freq and name information of lines in a specific directory(with the same name of InputTel, created by @identify)
+!Require: format of the .dat file: [lineFreq][blank][lineName][\n]
+
+
+!!Warning: You should dele the previous 'fitting_results' directory in specific InputTel dir if you want to using this procedure again!!
+!!e.g. using rm -r xxx to dele a directory and its contents
+
+!some problem:
+!May be the output fitting results can be in a betterformat.
+!Don't know how to avoid that warning condition.
+!Can not set mo x flexibly, so some fittings are wrong!!
+!Can not set win for bad channels, or the win_range output will be wrong.
+
+!Edited by Yichen Sun 
+!2020.02.16
+!2020.02.17 Add another 'set mo x' after 'set mo x -140 20', try to make fitting better.
+!2020.03.13 @identify is done, so modify this procedure a lot. Delete the combine function.
+!2020.03.27 Add velo_ref velo_resolution and freq_resolution for output. Add some contents of readme.
+!2020.04.06 check 
+!!-----------------------------------------------
+
+
+define char*100 InputTel /global
+define int BaseNumber /global
+
+
+let InputTel &1
+let BaseNumber &2
+
+
+!!!file in the new file and fit the identified lines 
+
+file in 'InputTel'_all_ave_based'BaseNumber'.30m
+find
+get 1
+set unit v f
+pl
+!set mo x -140 20
+
+sic dir 'InputTel'    !enter the InputTel dictionary
+
+
+define int nl1 /global
+compute nl1 lines 'InputTel'_lines.dat
+
+!nl1 is the number of lines in the linefreqsdatfile
+
+define double freqls[nl1] /global
+accept freqls /column 'InputTel'_lines.dat
+
+define char*200 lineNamels[nl1] /global
+accept * lineNamels /column 'InputTel'_lines.dat
+
+define int LineFittingNumber /g
+
+
+sic mkdir fit_results
+sic dir fit_results
+
+!sic output lines_fit_m.dat new
+!sic output
+
+!sic output lines_fit_a.dat new
+!sic output
+
+sic output readme.txt new
+say "the data is in following structure:"
+say "Each row is for one line (17 values)."
+say ""
+say "-------------------------------------------"
+say "Freq LineName LineNumber BaseArea1 BaseSigma1 LineWindowRange BaseSigma2 LineSigma2 GaussArea GaussAreaErr GaussPosition GaussPositionErr GaussWidth GaussWidthErr Velo_Ref Velo_resolution Freq_resolution"
+say "-------------------------------------------"
+say ""
+say "[1]Freq: Modified frequency listed in the 'InputTel'_lines.dat file. For automatic mode, it is the jpl restfreq of lines, but for manual mode in the case of multiple lines, it may not be the restfreq, just the modi freq."
+say "[2]LineName: Name of lines listed in the 'InputTel'_lines.dat file."
+say "[3]LineNumber: A symbol for lines number. If it is not '1', it means a fitting of multiple lines is done. And the number means the sequence number of line in the multiple lines."
+say "[4]BaseArea1: Command 'base' area"
+say "[5]BaseSigma1: Command 'base' sigma"
+say "[6]LineWindowRange: Set win range for lines, but not the 'line' command range"
+say "[7]BaseSigma2: Gauss_fitting base sigma"
+say "[8]LineSigma2: Gauss_fitting line sigma"
+say "[9]GaussArea: Gauss_fitting line area"
+say "[10]GaussAreaErr: Gauss_fitting line area error"
+say "[11]GaussPosition: Gauss_fitting line position"
+say "[12]GaussPositionErr: Gauss_fitting line position error"
+say "[13]GaussWidth: Gauss_fitting line FWHM"
+say "[14]GaussWidthErr: Gauss_fitting line FWHM error"
+say "[15]Velo_Ref: Velocity at reference channel"
+say "[16]Velo_resolution: Velocity resolution of the current spectrum"
+say "[17]Freq_resolution: Frequency resolution of the current spectrum"
+sic output
+
+exam nl1
+exam freqls
+exam lineNamels
+
+say "Please choose your mode: TYPEIN = manual(m) or automatic (a)"
+define char*50 typein
+let typein &3
+
+
+
+!---------------manual mode------------------
+begin procedure manual-mode-fitting
+
+sic output lines_fit_m.dat new
+sic output
+
+for i 1 to nl1
+  modi freq freqls[i]   
+  set mo y t
+  set mo x -140 20      !!this several lines make the signal in the center of figure.
+  pl
+  say "set mo x again"
+  set mo x
+  pl              
+  say "Please set windows!"
+  set win
+  draw win 
+  say "Please set line number and lines!"
+  let LineFittingNumber &4
+  say "Now set line"
+  line 'LineFittingNumber'
+  base /pl
+  min
+!  iterate
+  vis /pen 3
+  
+  hardcopy No'i'_'lineNamels[i]'_fit_res_m.eps
+  g\draw text 10 14 NO'i'_'lineNamels[i]'
+  hardcopy NO'i'_lines_show.pdf /device pdf
+  sic output lines_fit_m.dat append
+!  say "**************"
+!  say "Freq" "Lines" 
+!  say 'freqls[i]' 'lineNamels[i]' 
+!  say "Base_error: " 'R%HEAD%GAU%SIGBA' 
+!  say "Win_error: " 'R%HEAD%GAU%SIGRA'
+ 
+!  say "Area" "Position" "Width" 
+  for k 1 to R%HEAD%GAU%NLINE
+   define double temp1[3]
+   define double temp2[3]
+   for j 1 to 3
+     let temp1[j] R%HEAD%GAU%NFIT['j+3*(k-1)']
+     let temp2[j] R%HEAD%GAU%NERR['j+3*(k-1)']
+   next j
+   say 'freqls[i]' 'lineNamels[i]' 'k' 'R%HEAD%BAS%AIRE' 'R%HEAD%BAS%SIGFI' 'R%HEAD%BAS%W2[k]-R%HEAD%BAS%W1[k]' 'R%HEAD%GAU%SIGBA' 'R%HEAD%GAU%SIGRA' 'temp1[1]' 'temp2[1]' 'temp1[2]' 'temp2[2]' 'temp1[3]' 'temp2[3]' 'R%HEAD%SPE%VOFF' 'R%HEAD%SPE%VRES' 'R%HEAD%SPE%FRES'
+   dele /var temp1  
+   dele /var temp2
+  next k
+
+!  say "Area_err" "Position_err" "Width_err" 
+!  for k 1 to R%HEAD%GAU%NLINE
+!   define double temp[3]
+!   for j 1 to 3
+!     let temp[j] R%HEAD%GAU%NERR['j+3*(k-1)']
+!   next j
+!   say 'temp[1]' 'temp[2]' 'temp[3]' 
+!   dele /var temp
+!  next k
+
+  sic output
+  
+  set mo x t
+  pl
+  base
+  pl
+  sic wait 1
+   
+  !!these several commands aims to maintain the whole spectra constained to y=0
+  
+next i 
+end procedure manual-mode-fitting
+!----------------------------------------
+
+!---------------automatic mode-----------------
+begin procedure automatic-mode-fitting
+  define double LineWidth
+  say "Please input LineWidth"
+  let linewidth &4
+
+  sic output lines_fit_a.dat new
+  sic output
+  
+  for i 1 to nl1 
+   modi freq freqls[i]
+   set mo y t
+   set mo x -61.44-10 -61.44+10
+   pl
+   set win -61.44-'LineWidth' -61.44+'LineWidth'
+   base 
+   pl
+   base /pl
+   draw win
+   min
+!   iterate
+   vis /pen 3
+   
+   g\draw text 1 14 halfLineWidth='LineWidth'
+   hardcopy No'i'_'lineNamels[i]'_fit_res_a.eps
+   
+   g\draw text 10 14 NO'i'_'lineNamels[i]'
+   hardcopy NO'i'_lines_show.pdf /device pdf
+
+   sic output lines_fit_a.dat append
+   for k 1 to R%HEAD%GAU%NLINE
+    define double temp1[3]
+    define double temp2[3]
+    for j 1 to 3
+      let temp1[j] R%HEAD%GAU%NFIT['j+3*(k-1)']
+      let temp2[j] R%HEAD%GAU%NERR['j+3*(k-1)']
+    next j
+    say 'freqls[i]' 'lineNamels[i]' 'k' 'R%HEAD%BAS%AIRE' 'R%HEAD%BAS%SIGFI' 'R%HEAD%BAS%W2[1]-R%HEAD%BAS%W1[1]' 'R%HEAD%GAU%SIGBA' 'R%HEAD%GAU%SIGRA' 'temp1[1]' 'temp2[1]' 'temp1[2]' 'temp2[2]' 'temp1[3]' 'temp2[3]' 'R%HEAD%SPE%VOFF' 'R%HEAD%SPE%VRES' 'R%HEAD%SPE%FRES'
+    dele /var temp1
+    dele /var temp2
+   next k
+   
+   sic output
+
+   set mo x t
+   pl
+   base
+   pl
+   sic wait 1
+   
+  next i
+
+end procedure automatic-mode-fitting
+!-------------------------------------------
+
+if (typein.eq."m").or.(typein.eq."M")
+  @manual-mode-fitting
+else if (typein.eq."a").or.(typein.eq."A")
+  @automatic-mode-fitting
+else 
+  return error
+endif
+
+
+sic dir ../..
+
+dele /var InputTel
+dele /var BaseNumber
+dele /var nl1
+dele /var freqls
+dele /var lineNamels
+dele /var LineFittingNumber
+
+
+$pwd
+
+
+
+
+
+
+
+
+
+
+
+

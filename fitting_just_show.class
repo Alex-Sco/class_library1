@@ -1,0 +1,155 @@
+!@fitting_just_show.class
+
+!!aim to show lines figure in a fixed range
+!!note the LineWidth is for velocity
+!!for IRAS0245, the LineWidth is 4 sigma wide of the 13CO gaussian fitting function.
+
+!Edit by Yichen Sun
+!2020.04.06
+
+!-----------------------------
+
+define char*200 InputTel
+define double LineWidth
+
+let InputTel &1
+
+say "Line width is for velocity"
+let LineWidth &2
+
+
+!!!file in the new file and fit the identified lines
+
+file in 'InputTel'_all_ave_based1.30m
+find
+get 1
+set mo x t
+set mo y t
+set unit v f
+pl
+
+!**base to get sigma **! Note: if you set win properly, the base sigma differ very little each time and can be neglected.
+say "set win for base!"
+set win 
+draw win
+base /pl
+!define double basesigma 
+!let basesigma sigma
+!***
+
+
+sic dir 'InputTel'
+
+
+!***check if there is a show dir existing***
+
+say "if a show dir exist? (typein = y or n)"
+define char*100 typein
+let typein &3
+
+if ((typein.eq."n").or.(typein.eq."N")) then
+   sic mkdir showing_lines
+else if ((typein.eq."y").or.(typein.eq."Y")) then
+   continue
+else
+   say "Wrong Input!"
+   sic dir ..
+   return error
+endif
+dele /var typein
+
+!***check finished***
+
+!**options: to check uncertain lines:
+say "check certain lines(C) or uncertain lines(U)?)"
+define char*100 UNCtypein
+let UNCtypein &3
+
+
+!**options: to check uncertain lines
+!define char*200 uncert
+!if PRO%NARG.ge.4 then
+!define char*200 uncert
+!let uncert &4
+!end if
+
+!!doesn't work. Needs to modify.
+
+
+!***read in line freq informations***
+!if (exist(uncert).and.(uncert.eq."uncertain")) 
+
+if (UNCtypein.eq."u").or.(UNCtypein.eq."U")
+ define int nl
+ compute nl lines 'InputTel'_uncertain_lines.dat
+
+ !nl is the number of lines in the linefreqsdatfile
+
+ define double freqls[nl]
+ accept freqls /column 'InputTel'_uncertain_lines.dat
+
+ define char*200 lineNamels[nl]
+ accept * lineNamels /column 'InputTel'_uncertain_lines.dat
+ 
+ sic dir showing_lines
+ sic mkdir uncertain_lines
+ sic dir uncertain_lines
+
+!else if (exist(uncert).and.(uncert.ne."uncertain")) 
+! say "wrong input!"
+! sic dir ..
+! return error
+
+else if (UNCtypein.eq."c").or.(UNCtypein.eq."C")
+ define int nl
+ compute nl lines 'InputTel'_lines.dat
+
+ !nl is the number of lines in the linefreqsdatfile
+
+ define double freqls[nl]
+ accept freqls /column 'InputTel'_lines.dat
+
+ define char*200 lineNamels[nl]
+ accept * lineNamels /column 'InputTel'_lines.dat
+ sic dir showing_lines
+else 
+ say "wrong input!"
+ sic dir ..
+ return error
+
+endif 
+
+!***read ending***
+
+!***show lines and hardcopy lines***
+!sic dir showing_lines
+
+for i 1 to nl
+  modi freq freqls[i]
+  set mo y t
+  set mo x -61.44-40 -61.44+40
+  set win -61.44-'LineWidth'-0.1 -61.44+'LineWidth'+0.1
+  pl
+  draw win 
+  say "draw win and sigma lines"
+  g\draw relocate rx[1] 3*sigma /user
+  g\draw line rx[channels] 3*sigma /user
+  g\draw relocate rx[1] 4*sigma /user
+  g\draw line rx[channels] 4*sigma /user   !draw 3sigma and 4sigma lines
+  g\draw text 1 14 halfLineWidth='LineWidth'
+  g\draw text 20 14 sigma='sigma'
+  sic wait 1
+  hardcopy NO_'i'_'lineNamels[i]'_show.eps
+  g\draw text 10 14 NO'i'_'lineNamels[i]'
+  hardcopy NO'i'_lines_show.pdf /device pdf 
+next i
+
+
+!$pdfunite NO*.pdf all_lines.pdf
+!$rm NO*.pdf 
+
+
+if (UNCtypein.eq."u").or.(UNCtypein.eq."U")
+ sic dir ../../..
+else if (UNCtypein.eq."c").or.(UNCtypein.eq."C")
+ sic dir ../..  
