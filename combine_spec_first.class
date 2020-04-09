@@ -2,8 +2,14 @@
 !AIM: stitch the three base part of one spectrum first , then ave all the spectra.
 !generate a file storing all the single stitched spectra, then you can type ave to ave them.
 
+!this procedure can be used to handle mapping data needing to be cut center (by @cut_center.class or cut_cent after personal initialize)
+!@cut_center procedure is contributed by Lingrui Lin.
+
 !Edit by Yichen Sun
 !2020.04.06
+!2020.04.09 add one note related to cut center.
+!---------------------------------------------------------------------------
+
 
 define char*200 InputTelName
 define int BaseNumber
@@ -30,6 +36,7 @@ file out 'InputTelName'_all_based'BaseNumber'.30m s
 
 quiet
 
+!------------stitch three parts for each parts of one spectrum----------
 for i 1 to findnumber
   sic dele tempfile.30m
   file out tempfile.30m s
