@@ -1,0 +1,36 @@
+!@ave_write.class
+
+!AIM: ave current spectrum in R memory and generate a file with customized filename.
+
+!Edit by Yichen Sun
+!2020.04.09
+
+!-----------------------------------------
+
+define char*200 OutputAveFileName
+
+say "Please check the outputAveFileName!"
+say "If you have got a file have the same name, this procedure will DELETE the previous FILE!"
+
+let OutputAveFileName &1
+
+
+set align f c
+set nomatch
+set bad a
+
+find
+
+sic dele 'OutputAveFileName'.30m
+file out 'OutputAveFileName'.30m s
+ave /res
+pl
+write 
+
+file in 'OutputAveFileName'.30m
+find
+get 1
+pl
+
+
+
