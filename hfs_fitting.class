@@ -1,0 +1,232 @@
+!@hfs_fitting.class
+!AIM:to read information of lines from JPL and generate a .dat file for hfs fitting use.
+!AIM:to do hfs fitting for some specific multiple lines: e.g. CN
+
+!REQUIRE: an opened proper spectra file in CLASS.
+!REQUIRE: an existing dir named hfs_space having instored 'LineName'.dat files.
+!REQUIRE: 'LineName'.dat are in JPL format.
+
+!Problem: can only be useful when set the ref line the strongest line. I do not know why.
+
+!Edit by Yichen Sun
+!2020.04.09
+!2020.04.11 add calculate and output section
+!----------------------------------------
+
+
+define char*100 LineName
+define int nl
+
+let LineName &1
+
+!------------read parameters in hfs_space------------
+!sic mkdir hfs_space
+sic dir hfs_space
+$pwd
+
+compute nl lines 'LineName'.dat
+
+exam nl
+
+define double Freqls[nl]
+define double FreqErr[nl]
+define double lils[nl]
+
+accept Freqls FreqErr lils /column 'LineName'.dat
+
+exam Freqls
+exam FreqErr
+exam lils
+
+
+!-------------calculate velocity shift & normalized intensity of lines for later HFS fitting use--------------
+
+define double start_line_freq
+define int LineNumber
+
+let start_line_freq &2
+let LineNumber &3
+
+define int start_number
+
+for i 1 to nl
+   if ('Freqls[i]'.ge.'start_line_freq-0.0000005')
+   say 'Freqls[i]' 'start_line_freq'
+   let start_number i
+   break
+   end if
+next i
+
+exam start_number
+
+
+define double velo_shift['LineNumber']
+define double inten['LineNumber']
+define double inten_normal['LineNumber']
+
+define int ref_line_number
+say "Set your reference line for HFS. Please input the line number of current several lines."
+say "(From lower freq to higher. Not the number in the datfile!)"
+let ref_line_number &4
+
+for i 1 to LineNumber
+   let inten[i] 10**lils['i-1+start_number']
+next i
+
+exam lils
+exam inten
+
+!return error
+
+define double all_inten
+
+let all_inten inten[1]
+
+for i 1 to 'LineNumber-1'
+   define double temp
+   let temp all_inten
+   
+   let all_inten 'temp'+inten['i+1']
+   dele /var temp
+next i
+
+exam all_inten
+!return error
+
+for i 1 to LineNumber
+   let velo_shift[i] (Freqls['i+start_number-1']-Freqls['start_number+ref_line_number-1'])*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES
+   let inten_normal[i] (inten[i]*1e7)/(all_inten*1e7)  
+next i 
+
+exam velo_shift
+exam inten_normal
+
+!return error
+    
+!-----------generate hfs_linename.dat for hfs fitting in the dir hfs_temp----------------
+
+sic dele hfs_'LineName'.dat
+sic output hfs_'LineName'.dat new
+
+say 'LineNumber' 
+for i 1 to LineNumber
+   say 'velo_shift[i]' 'inten_normal[i]'
+next i
+
+sic output
+
+!----------------------do hfs fitting------------------------
+modi freq Freqls['start_number+ref_line_number-1']
+
+define double LineWidth
+say "input line window width "
+let LineWidth &5
+
+set unit v f
+set mo x 'R%HEAD%SPE%VOFF+velo_shift[LineNumber]'-'LineWidth*(LineNumber+1.5)' 'R%HEAD%SPE%VOFF+velo_shift[1]'+'LineWidth*(LineNumber+1.5)'
+
+pl
+
+
+
+define double WinArray['2*LineNumber+1']
+let WinArray[1] 'LineNumber'
+
+
+
+for i 1 to LineNumber
+  let WinArray['2*i'] 'R%HEAD%SPE%VOFF+velo_shift[i]'-'LineWidth'
+  let WinArray['2*i+1'] 'R%HEAD%SPE%VOFF+velo_shift[i]'+'LineWidth'
+next i
+
+
+
+
+set win /var WinArray
+draw win
+base /pl
+
+pl
+draw win
+base /pl
+
+method hfs hfs_'LineName'.dat
+min
+vis /pen 3
+
+exam R%HEAD%NH3%NNH3     !HfS Fit results
+exam R%HEAD%NH3%ENH3     !Hfs Fit errors
+
+!--------------------------------hardcopy, calculate and output-------------------------------------
+
+g\draw text 1 14 halfWinWidth='LineWidth'
+g\draw text 10 14 'LineName' 
+g\draw text 20 14 HfS_fit
+
+define char*200 OutputLineName
+let OutputLineName &6 
+
+hardcopy 'OutputLineName'.eps /device eps /overwrite
+hardcopy 'OutputLineName'.pdf /device pdf /overwrite
+
+
+!------generate an introduction doc----------
+sic dele readme.txt
+sic output readme.txt new
+say "The data in the _res.dat are shown as follows:"
+say "----------------------------"
+say "LineName StartFreq LineNumber BaseSigma LineSigma T_ant*Tau T_ant*Tau_Err Vlsr Vlsr_Err Delta_V Delta_V_Err Tau_main Tau_main_Err T_ex T_ex_Err"
+say "----------------------------"
+say "[1]LineName"
+say "[2]StartFreq: The frequency of the first line(lowest frequency line) in the current(has been considered) mutiple lines"
+say "[3]LineNumber: The number of lines in the current multiple lines"
+say "[4]BaseSigma: Sigma on base"
+say "[5]LineSigma: Sigma on line"
+say "[6]T_ant*Tau: p1."
+say "[7]T_ant*Tau_Err: Error of p1"
+say "[8]Vlsr: p2. The velocity of the reference component (i.e. the one with v i = 0)"
+say "[9]Vlsr_Err: Error of p2"
+say "[10]Delta_V: p3. The common FWHM of all components"
+say "[11]Delta_V_Err: Error of p3"
+say "[12]Tau_main: p4. Equals the sum of all centerline opacities(while intensity is normalized)"
+say "[13]Tau_main_Err: Error of p4"
+say "[14]T_ex: The excitation temperature calculated by p1, p4, F_eff, B_eff and T_bkg"
+say "[15]T_ex_Err: Error of T_ex"
+sic output
+!--------------------------------------------
+
+!----------calculate T_ex and its error----------------
+
+define double T_ex
+define double T_bkg
+define double Feff
+define double Beff
+define double T_ex_Err
+
+let T_bkg 2.73  !set T_bkg at T_CMB
+let Feff 0.9    !may not be very exact
+let Beff 0.65   !at λ = 3 mm, B eff = 0.65, at 2 mm B eff = 0.6 and at 1.3 mm B eff = 0.45, for sources of diameter < 2'.
+                !for an object of size 30' , B eff at all these wavelength is 0.65.
+                !The source should not be larger than 30'
+
+let T_ex 'T_bkg+(Feff/Beff)*(R%HEAD%NH3%NNH3[1]/R%HEAD%NH3%NNH3[4])'
+let T_ex_Err '(Feff/Beff)*sqrt((R%HEAD%NH3%ENH3[1]/R%HEAD%NH3%NNH3[4])**2+(R%HEAD%NH3%NNH3[1]*R%HEAD%NH3%ENH3[4]/R%HEAD%NH3%NNH3[4]**2)**2)'
+
+exam T_ex
+exam T_ex_Err
+
+!-------output--------------
+sic dele hfs_'OutputLineName'_res.dat
+sic output hfs_'OutputLineName'_res.dat new
+say 'LineName' 'start_line_freq' 'LineNumber' 'R%HEAD%NH3%BNH3' 'R%HEAD%NH3%RNH3' 'R%HEAD%NH3%NNH3[1]' 'R%HEAD%NH3%ENH3[1]' 'R%HEAD%NH3%NNH3[2]' 'R%HEAD%NH3%ENH3[2]' 'R%HEAD%NH3%NNH3[3]' 'R%HEAD%NH3%ENH3[3]' 'R%HEAD%NH3%NNH3[4]' 'R%HEAD%NH3%ENH3[4]' 'T_ex' 'T_ex_Err'
+sic output
+
+sic dir ..
+
+
+
+
+
+
+
+
