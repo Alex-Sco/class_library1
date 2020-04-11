@@ -173,7 +173,7 @@ hardcopy 'OutputLineName'.pdf /device pdf /overwrite
 !------generate an introduction doc----------
 sic dele readme.txt
 sic output readme.txt new
-say "The data in the _res.dat are shown as follows:"
+say "The data in the *_res.dat are shown as follows:"
 say "----------------------------"
 say "LineName StartFreq LineNumber BaseSigma LineSigma T_ant*Tau T_ant*Tau_Err Vlsr Vlsr_Err Delta_V Delta_V_Err Tau_main Tau_main_Err T_ex T_ex_Err"
 say "----------------------------"
