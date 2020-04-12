@@ -4,54 +4,58 @@
 
 !NOTE: you should input the whole path of the file InputSourceFile if it is not in the local directory.
 
+!Warning: the 'SinglePointStartNumber' is just the number of the first PURE single point data of the tel list, while there are still some single point data in the mapping tel list, and the tel names cannot actually be the criteria to distinguish single point data and mapping data! 
+
 !Edit by Yichen Sun
-!20200406
-!----------------------------------------------------------------
+!20200412  the previous @extract_source.class has been renamed as @extract_source_pre.class
+!-----------------------------------------------------
 
-define char*200 InputSourceFile
-define char InputTel*100 
-define char FileName*100
+define char*200 InputSource
+define int SinglePointStartNumber
 
-say "Input the SourceFile"
-let InputSourceFile &1
-say "Input the Telescope Name"
-let InputTel &2
-say "Input the Output File Name"
-let FileName &3
+let InputSource &1
 
-file in 'InputSourceFile'
+file in 'InputSource'.30m
 
-find /tel 'InputTel' 
+find
 
-sic dele 'FileName'_1.30m 
-file out 'FileName'_1.30m s
+list /toc tel
 
-for i 1 to found
-get next
-extract 13825 20737 c
-write 
-next
+let SinglePointStartNumber &2
 
-sic dele 'FileName'_2.30m
-file out 'FileName'_2.30m s
+sic cpu
 
-find /tel 'InputTel'
+for i 1 to TOC%NTELE
+   if i.lt.SinglePointStartNumber 
+      for j 1 to 3
+        find /tel 'TOC%TELE[i]'
+        sic dele mapping'TOC%TELE[i]'_'j'.30m
+        file out mapping'TOC%TELE[i]'_'j'.30m s
+        for k 1 to found
+          get idx%num[k]
+          extract 'R%HEAD%SPE%NCHAN*(j-1)/3+1' 'R%HEAD%SPE%NCHAN*j/3' c
+          write 
+        next k
+      next j
+   else 
+      for j 1 to 3
+        find /tel 'TOC%TELE[i]'
+        sic dele sp'TOC%TELE[i]'_'j'.30m
+        file out sp'TOC%TELE[i]'_'j'.30m s
+        for k 1 to found
+          get idx%num[k]
+          extract 'R%HEAD%SPE%NCHAN*(j-1)/3+1' 'R%HEAD%SPE%NCHAN*j/3' c
+          write
+        next k
+      next j
+   endif  
+next i
 
-for i 1 to found
-get next
-extract 6913 13824 c
-write
-next
+sic cpu
+   
+!exam SIC%CPU%RAW%
+!exam SIC%CPU%CUMUL%
 
-sic dele 'FileName'_3.30m
-file out 'FileName'_3.30m s
 
-find /tel 'InputTel'
-
-for i 1 to found
-get next
-extract 1 6912 c
-write
-next
 
 
