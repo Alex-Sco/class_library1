@@ -1,0 +1,17 @@
+!@plot_all.class
+!AIM: plot all spectra in the index with a certain interval
+
+
+define double interval_time
+let interval_time &1
+
+find
+!set unit v f
+
+for i 1 to found
+get idx%num[i]
+pl
+sic wait 'interval_time'
+next i
+
+find
