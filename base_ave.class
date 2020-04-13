@@ -20,10 +20,10 @@ define double Freq
 define double Velo 
 
 let  InputFileName &1
-let  WindowSet &2
-let  BaseNumber &3
-let  Freq &4
-let  Velo &5
+let  Freq &2
+let  Velo &3
+let  BaseNumber &4
+let  WindowSet &5
 
 file in 'InputFileName'.30m
 find
