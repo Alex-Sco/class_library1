@@ -132,9 +132,9 @@ for i 1 to nl1
 !  iterate
   vis /pen 3
   
-  hardcopy No'i'_'lineNamels[i]'_fit_res_m.eps
+  hardcopy No'i'_'lineNamels[i]'_fit_res_m.eps /overwrite
   g\draw text 10 14 NO'i'_'lineNamels[i]'
-  hardcopy NO'i'_lines_show.pdf /device pdf
+  hardcopy NO'i'_lines_show.pdf /device pdf /overwrite
   sic output lines_fit_m.dat append
 !  say "**************"
 !  say "Freq" "Lines" 
@@ -191,9 +191,9 @@ begin procedure automatic-mode-fitting
   for i 1 to nl1 
    modi freq freqls[i]
    set mo y t
-   set mo x -61.44-10 -61.44+10
+   set mo x 'R%HEAD%SPE%VOFF'-'LineWidth'*4 'R%HEAD%SPE%VOFF'+'LineWidth'*4
    pl
-   set win -61.44-'LineWidth' -61.44+'LineWidth'
+   set win 'R%HEAD%SPE%VOFF'-'LineWidth' 'R%HEAD%SPE%VOFF'+'LineWidth'
    base 
    pl
    base /pl
@@ -203,10 +203,10 @@ begin procedure automatic-mode-fitting
    vis /pen 3
    
    g\draw text 1 14 halfLineWidth='LineWidth'
-   hardcopy No'i'_'lineNamels[i]'_fit_res_a.eps
+   hardcopy No'i'_'lineNamels[i]'_fit_res_a.eps /overwrite
    
    g\draw text 10 14 NO'i'_'lineNamels[i]'
-   hardcopy NO'i'_lines_show.pdf /device pdf
+   hardcopy NO'i'_lines_show.pdf /device pdf /overwrite
 
    sic output lines_fit_a.dat append
    for k 1 to R%HEAD%GAU%NLINE

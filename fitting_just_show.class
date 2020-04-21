@@ -127,8 +127,8 @@ endif
 for i 1 to nl
   modi freq freqls[i]
   set mo y t
-  set mo x -61.44-40 -61.44+40
-  set win -61.44-'LineWidth'-0.1 -61.44+'LineWidth'+0.1
+  set mo x 'R%HEAD%SPE%VOFF'-40 'R%HEAD%SPE%VOFF'+40
+  set win 'R%HEAD%SPE%VOFF'-'LineWidth'-0.1 'R%HEAD%SPE%VOFF'+'LineWidth'+0.1
   pl
   draw win 
   say "draw win and sigma lines"
@@ -139,9 +139,9 @@ for i 1 to nl
   g\draw text 1 14 halfLineWidth='LineWidth'
   g\draw text 20 14 sigma='sigma'
   sic wait 1
-  hardcopy NO_'i'_'lineNamels[i]'_show.eps
+  hardcopy NO_'i'_'lineNamels[i]'_show.eps /overwrite
   g\draw text 10 14 NO'i'_'lineNamels[i]'
-  hardcopy NO'i'_lines_show.pdf /device pdf 
+  hardcopy NO'i'_lines_show.pdf /device pdf /overwrite
 next i
 
 
