@@ -1,0 +1,47 @@
+!@calculate_width.class
+!
+!In my process, I set win as four sigma of gauss curve function fitted by 13CO line when I fit lines by batchprogram. 
+!AIM: this program aims to fit 13CO and calculate the 4*sigma value by the fitting results(Width, i.e. FWHM)
+!
+!Edit by Yichen Sun
+!2020.04.22
+!------------------------
+
+find
+
+get 1
+pl
+
+modi freq 110201.354
+!modi freq 168762.7624
+
+
+set unit v f
+
+set mo x 'R%HEAD%SPE%VOFF-40' 'R%HEAD%SPE%VOFF+40'
+
+set win 'R%HEAD%SPE%VOFF-5' 'R%HEAD%SPE%VOFF+5'
+
+base 
+pl
+base /pl
+pl
+draw win
+
+min
+vis /pen 3
+
+!----------
+
+define double Width
+
+let Width '4*R%HEAD%GAU%NFIT[3]/(2*sqrt(2*log(2)))'
+
+exam Width
+
+g\draw text 1 14 FWHM='4*R%HEAD%GAU%NFIT[3]'
+g\draw text 10 14 Width='Width'
+g\draw text 20 14 Width_Err='4*R%HEAD%GAU%NERR[3]/(2*sqrt(2*log(2)))'
+hardcopy 13CO_gauss_fit.eps /overwrite
+
+

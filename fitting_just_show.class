@@ -29,54 +29,28 @@ set unit v f
 pl
 
 !**base to get sigma **! Note: if you set win properly, the base sigma differ very little each time and can be neglected.
-say "set win for base!"
-set win 
-draw win
-base /pl
+!say "set win for base!"
+!set win 
+!draw win
+!base /pl
 !define double basesigma 
 !let basesigma sigma
 !***
-
+!Sometimes the sigma increases continually, then it is hard to divide spectrum into different parts with different sigma
+!
 
 sic dir 'InputTel'
 
 
-!***check if there is a show dir existing***
 
-say "if a show dir exist? (typein = y or n)"
-define char*100 typein
-let typein &3
-
-if ((typein.eq."n").or.(typein.eq."N")) then
-   sic mkdir showing_lines
-else if ((typein.eq."y").or.(typein.eq."Y")) then
-   continue
-else
-   say "Wrong Input!"
-   sic dir ..
-   return error
-endif
-dele /var typein
-
-!***check finished***
-
-!**options: to check uncertain lines:
+!---options: to check uncertain lines:
 say "check certain lines(C) or uncertain lines(U)?)"
 define char*100 UNCtypein
 let UNCtypein &3
+!----------
+sic mkdir showing_lines 
 
-
-!**options: to check uncertain lines
-!define char*200 uncert
-!if PRO%NARG.ge.4 then
-!define char*200 uncert
-!let uncert &4
-!end if
-
-!!doesn't work. Needs to modify.
-
-
-!***read in line freq informations***
+!-------read in line freq informations-------------
 !if (exist(uncert).and.(uncert.eq."uncertain")) 
 
 if (UNCtypein.eq."u").or.(UNCtypein.eq."U")
@@ -119,9 +93,9 @@ else
 
 endif 
 
-!***read ending***
+!--------read ending-------
 
-!***show lines and hardcopy lines***
+!----show lines and hardcopy lines------
 !sic dir showing_lines
 
 for i 1 to nl
@@ -130,6 +104,9 @@ for i 1 to nl
   set mo x 'R%HEAD%SPE%VOFF'-40 'R%HEAD%SPE%VOFF'+40
   set win 'R%HEAD%SPE%VOFF'-'LineWidth'-0.1 'R%HEAD%SPE%VOFF'+'LineWidth'+0.1
   pl
+  base 1 
+  pl
+  base 1 /pl
   draw win 
   say "draw win and sigma lines"
   g\draw relocate rx[1] 3*sigma /user
@@ -139,8 +116,8 @@ for i 1 to nl
   g\draw text 1 14 halfLineWidth='LineWidth'
   g\draw text 20 14 sigma='sigma'
   sic wait 1
-  hardcopy NO_'i'_'lineNamels[i]'_show.eps /overwrite
   g\draw text 10 14 NO'i'_'lineNamels[i]'
+  hardcopy NO'i'_'lineNamels[i]'_show.eps /overwrite
   hardcopy NO'i'_lines_show.pdf /device pdf /overwrite
 next i
 
