@@ -239,6 +239,12 @@ if (typein.eq."m").or.(typein.eq."M")
 else if (typein.eq."a").or.(typein.eq."A")
   @automatic-mode-fitting
 else 
+  dele /var InputTel
+  dele /var BaseNumber
+  dele /var nl1
+  dele /var freqls
+  dele /var lineNamels
+  dele /var LineFittingNumber
   return error
 endif
 
