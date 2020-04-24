@@ -9,12 +9,15 @@
 
 !Edit by Yichen Sun
 !20200406
+!20200413 change the order of five input variables
 !-------------------------------------------------------
 
+symbol verbose "sic message class s+i" ! add
+symbol quiet "sic message class s-i" ! remove
 
 
 define char InputFileName*100 
-define char WindowSet*200 
+!define char WindowSet*200 
 define char BaseNumber*100 
 define double Freq
 define double Velo 
@@ -23,25 +26,45 @@ let  InputFileName &1
 let  Freq &2
 let  Velo &3
 let  BaseNumber &4
-let  WindowSet &5
+!let  WindowSeti &5
+
 
 file in 'InputFileName'.30m
 find
 set mo x t
 set unit v f
 set align f c
+
+ave /res
+p
+set win
+
+
 sic dele 'InputFileName'_based'BaseNumber'.30m
 file out 'InputFileName'_based'BaseNumber'.30m s
+
+quiet
 
 
 for i 1 to found
 get next
 modi freq 'Freq'
 modi velo 'Velo'
-set win 'WindowSet'
+!set win 'WindowSet'
 base 'BaseNumber'
 write
 next
+
+verbose
+
+
+for i 1 to R%HEAD%BAS%NWIND
+exam R%HEAD%BAS%W1[i]
+exam R%HEAD%BAS%W2[i]
+next i
+
+
+say "base completed"
 
 file in 'InputFileName'_based'BaseNumber'.30m
 sic dele 'InputFileName'_ave_based'BaseNumber'.30m
