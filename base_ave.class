@@ -10,6 +10,7 @@
 !Edit by Yichen Sun
 !20200406
 !20200413 change the order of five input variables
+!20200423 cancel the windowset, adding a pre-based ave check
 !-------------------------------------------------------
 
 symbol verbose "sic message class s+i" ! add
