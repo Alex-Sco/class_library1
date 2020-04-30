@@ -1,0 +1,98 @@
+!@mapping_line_cube.class
+!AIM: To create mapping cube for certain line / lines to go view
+!
+!REQUIRE: A based spectra file covering the freq band of certain line you want to check
+!
+!Edit by Yichen Sun
+!2020.04.29
+!-----------------------------------------------
+
+
+
+symbol verbose "sic message class s+i" ! add
+symbol quiet "sic message class s-i" ! remove
+!Set that then use 'quiet' and 'verbose' to control the terminal output
+
+
+define char InputFileName*200
+define char LineName*200
+define double RefFreq
+define int BaseNumber
+define int LineNumber 
+define int LineWidth
+
+let InputFileName &1
+let LineName &2
+let RefFreq &3
+let BaseNumber &4
+let LineNumber &5
+let LineWidth &6
+
+
+
+!----input line frequency list and set win for base later-----------
+
+define double Freqls['LineNumber']
+let Freqls &7
+
+define double WinArray['2*LineNumber+1']
+let WinArray[1] 'LineNumber'
+
+file in 'InputFileName'.30m
+find
+ave /res
+p
+
+
+for i 1 to LineNumber
+  let WinArray['2*i'] 'R%HEAD%SPE%VOFF+(Freqls[i]-RefFreq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'-'LineWidth'
+  let WinArray['2*i+1'] 'R%HEAD%SPE%VOFF+(Freqls[i]-RefFreq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'+'LineWidth'
+next i
+
+!------------------------------
+
+!----------base in a small range around line/lines--------
+
+file in 'InputFileName'.30m
+find
+
+set align f c
+set unit v f
+
+sic dele 'LineName'_based'BaseNumber'.30m
+file out 'LineName'_based'BaseNumber'.30m s
+
+quiet
+
+for i 1 to found
+get idx%num[i]
+modi freq 'RefFreq'
+set mo x t
+set mo x R%HEAD%SPE%VOFF+'(Freqls[LineNumber]-RefFreq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'-'LineWidth*(LineNumber+4)' R%HEAD%SPE%VOFF+'(Freqls[1]-RefFreq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'+'LineWidth*(LineNumber+4)'
+
+pl
+set win /var WinArray
+
+base 'BaseNumber'
+write
+next i
+
+verbose
+!----------------
+
+!-----------make table and related mapping files----------------
+file in 'LineName'_based'BaseNumber'.30m 
+find
+
+!note: before making table , you should file in and find first!
+
+let map%cell -2 2
+table 'LineName'_cube new /range R%HEAD%SPE%VOFF+'(Freqls[LineNumber]-RefFreq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'-'LineWidth*(LineNumber+2.5)' R%HEAD%SPE%VOFF+'(Freqls[1]-RefFreq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'+'LineWidth*(LineNumber+2.5)' v
+xy_map 'LineName'_cube
+let name 'LineName'_cube
+let type lmv
+go view  
+
+!--------
+
+
