@@ -15,6 +15,7 @@
 !2020.04.09
 !2020.04.11 add calculate and output section
 !2020.04.17 change the 'LineName'.dat reading path(using copy) (BUT FAILED because sic copy can not be used?)
+!2020.05.07 correct the base_channel compute section
 !----------------------------------------
 
 
