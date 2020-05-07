@@ -1,0 +1,171 @@
+!@multiple_lines_fitting.class
+!AIM: try to do multiple lines more easily
+!AIM: try to optimize multiple lines fitting?
+
+!REQUIRE: an open spectrum file with the lines you want to fit in it.
+
+!Note: the lineWidth here is the 4 sigma value of gauss fitting function of the reference strong line(e.g. 13CO), windows are fixed to this width
+!And the lines initial FWHM here are fixed to FWHM of the strong line calculated by 4 sigma value. The initial temperature para is set as multiples of base sigma(current mod x range)
+
+!Edit by Yichen Sun
+!2020.04.07
+!--------------------------------------------------------------
+
+
+define int lineNumber
+let lineNumber &1
+
+if 'lineNumber'.eq.1
+  say "Only for multiple lines(lineNumber>1)."
+  return err
+end if 
+
+define double Freqls['lineNumber']
+
+say "input line freq list: e.g. [freq1] [freq2] [freq3]"
+let Freqls &2
+
+define double lineWidth
+define char*100 lineName
+
+let lineWidth &3
+let lineName &4
+
+
+!--------let the reference freq the median of the lowest anf highest freqs and calculate line position in the velo axis in this reference----------
+
+define double center_freq
+let center_freq ('Freqls[1]'+'Freqls[lineNumber]')/2
+modi freq 'center_freq'
+
+
+set unit v f
+set mo x t
+set mo x R%HEAD%SPE%VOFF+'(Freqls[lineNumber]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'-'lineWidth*(lineNumber+2.5)' R%HEAD%SPE%VOFF+'(Freqls[1]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'+'lineWidth*(lineNumber+2.5)'
+
+pl 
+
+define double WinArray['2*lineNumber+1']
+let WinArray[1] 'lineNumber'
+
+for i 1 to lineNumber
+  let WinArray['2*i'] 'R%HEAD%SPE%VOFF+(Freqls[i]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'-'lineWidth' 
+  let WinArray['2*i+1'] 'R%HEAD%SPE%VOFF+(Freqls[i]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'+'lineWidth'
+next i 
+
+set win /var WinArray
+
+base /pl
+pl
+base /pl
+draw win
+
+!--------calculate channel number for base----------
+!---
+define double win_range
+define double storing[100]
+let win_range 0
+
+say ""
+exam WinArray
+say ""
+
+for i 1 to lineNumber-1
+   if WinArray['2*i+3'].gt.WinArray['2*i'] 
+      let storing[i] abs(WinArray['2*i+3']-WinArray['2*i+1'])    !Note: because freq higher velo lower, win is actually reverse here
+      if 'i'.eq.'lineNumber-1'
+         let storing['i+1'] abs(WinArray['2*i+3']-WinArray['2*i+2'])
+      end if  
+   else
+      let storing[i] abs(WinArray['2*i+1']-WinArray['2*i'])
+      if 'i'.eq.'lineNumber-1'
+         let storing['i+1'] abs(WinArray['2*i+3']-WinArray['2*i+2'])       
+      end if
+   end if   
+next i
+
+for i 1 to 'lineNumber'
+  let win_range 'win_range'+storing[i]
+next i
+
+!exam storing
+say " "
+
+exam win_range
+define double win_channel
+let win_channel 'win_range/abs(R%HEAD%SPE%VRES)'
+exam win_channel
+!--
+
+define double base_channel
+
+let base_channel '(USER_XMAX-USER_XMIN-win_range)/abs(R%HEAD%SPE%VRES)'
+
+exam base_channel
+say ""
+
+!return err
+
+!--------------------------
+
+!--------------create dir temp_store in the local dir to instore fitting parameters there---------------
+sic mkdir temp_space
+sic dir temp_space
+
+!-------create a file storing fitting parameters for later multiple fitting----------
+sic dele multiple_fit_par.dat
+sic output multiple_fit_par.dat new
+
+say 'lineNumber'
+for i 1 to 'lineNumber'
+  say 0 '2.5*R%HEAD%BAS%SIGFI' 0 'R%HEAD%SPE%VOFF+(Freqls[i]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES' 0 '2*sqrt(2*log(2))*(lineWidth/4)'
+next i
+
+!note : you can modify the initial temperature above to get a better fitting results, especially for some weak lines.
+
+sic output
+!----------------------
+
+!say "Now set lines!"
+!line 'lineNumber' 
+
+method gauss
+
+line /input multiple_fit_par.dat
+
+min
+!iterate
+vis /pen 3
+
+g\draw text 2 14 halfWinWidth='lineWidth'
+g\draw text 10 14 'lineName'
+
+
+hardcopy NO0_'lineName'_fit_res_o.eps /overwrite
+hardcopy NO0_'lineName'_fit_res_o.pdf /device pdf /overwrite
+
+sic dele multiple_res_'lineName'.dat
+sic output multiple_res_'lineName'.dat new
+
+for i 1 to R%HEAD%GAU%NLINE
+  define double temp1[3]
+  define double temp2[3]
+  for j 1 to 3
+     let temp1[j] R%HEAD%GAU%NFIT['j+3*(i-1)']
+     let temp2[j] R%HEAD%GAU%NERR['j+3*(i-1)']
+  next j
+  say 'Freqls[i]' 'lineName' 'i' 'R%HEAD%BAS%AIRE' 'R%HEAD%BAS%SIGFI' 'win_range' 'R%HEAD%GAU%SIGBA' 'R%HEAD%GAU%SIGRA' 'temp1[1]' 'temp2[1]' 'temp1[2]' 'temp2[2]' 'temp1[3]' 'temp2[3]' 'R%HEAD%SPE%VOFF' 'R%HEAD%SPE%VRES' 'R%HEAD%SPE%FRES' 'base_channel'
+  dele /var temp1
+  dele /var temp2
+next i
+
+sic output
+
+sic dir ..
+$pwd
+
+
+
+  
+
+

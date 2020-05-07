@@ -24,12 +24,12 @@ define int nl
 let LineName &1
 
 !------------read parameters in hfs_space------------
-!sic mkdir hfs_space
+sic mkdir hfs_space
 sic dir hfs_space
-!sic dele 'LineName'.dat
+sic dele 'LineName'.dat
 
 $pwd
-!sic copy /home/alex/Working/Radio/GILDAS_workspace/LINE/'LineName'.dat .
+sic copy \home/alex/Working/Radio/GILDAS_workspace/LINE/'LineName'.dat .
 
 
 compute nl lines 'LineName'.dat
@@ -131,7 +131,7 @@ say "input line window width "
 let LineWidth &5
 
 set unit v f
-set mo x 'R%HEAD%SPE%VOFF+velo_shift[LineNumber]'-'LineWidth*(LineNumber+1.5)' 'R%HEAD%SPE%VOFF+velo_shift[1]'+'LineWidth*(LineNumber+1.5)'
+set mo x 'R%HEAD%SPE%VOFF+velo_shift[LineNumber]'-'LineWidth*(LineNumber+2.5)' 'R%HEAD%SPE%VOFF+velo_shift[1]'+'LineWidth*(LineNumber+2.5)'
 
 pl
 
@@ -158,13 +158,63 @@ pl
 draw win
 base /pl
 
+!-------calculate channel number for base--------------
+
+define double win_range
+define double storing[100]
+let win_range 0
+
+say ""
+exam WinArray
+say ""
+
+for i 1 to lineNumber-1
+   if WinArray['2*i+3'].gt.WinArray['2*i']
+      let storing[i] abs(WinArray['2*i+3']-WinArray['2*i+1'])    !Note: because freq higher velo lower, win is actually reverse here
+      if 'i'.eq.'lineNumber-1'
+         let storing['i+1'] abs(WinArray['2*i+3']-WinArray['2*i+2'])
+      end if
+   else
+      let storing[i] abs(WinArray['2*i+1']-WinArray['2*i'])
+      if 'i'.eq.'lineNumber-1'
+         let storing['i+1'] abs(WinArray['2*i+3']-WinArray['2*i+2'])
+      end if
+   end if
+next i
+
+for i 1 to 'LineNumber'
+  let win_range 'win_range'+storing[i]
+next i
+
+!exam storing
+say " "
+
+exam win_range
+define double win_channel
+let win_channel 'win_range/abs(R%HEAD%SPE%VRES)'
+exam win_channel
+!--
+
+define double base_channel
+
+let base_channel '(USER_XMAX-USER_XMIN-win_range)/abs(R%HEAD%SPE%VRES)'
+
+exam base_channel
+say ""
+
+
+
+
+!------
+
 method hfs hfs_'LineName'.dat
 min
 vis /pen 3
 
+say ""
 exam R%HEAD%NH3%NNH3     !HfS Fit results
 exam R%HEAD%NH3%ENH3     !Hfs Fit errors
-
+say ""
 !--------------------------------hardcopy, calculate and output-------------------------------------
 
 g\draw text 1 14 halfWinWidth='LineWidth'
@@ -183,23 +233,29 @@ sic dele readme.txt
 sic output readme.txt new
 say "The data in the *_res.dat are shown as follows:"
 say "----------------------------"
-say "LineName StartFreq LineNumber BaseSigma LineSigma T_ant*Tau T_ant*Tau_Err Vlsr Vlsr_Err Delta_V Delta_V_Err Tau_main Tau_main_Err T_ex T_ex_Err"
+say "LineName StartFreq LineNumber BaseArea BaseSigma1 BaseSigma2 LineSigma T_ant*Tau T_ant*Tau_Err Vlsr Vlsr_Err Delta_V Delta_V_Err Tau_main Tau_main_Err T_ex T_ex_Err LineWindowRange Base_channel Velo_resolution Freq_resolution"
 say "----------------------------"
 say "[1]LineName"
 say "[2]StartFreq: The frequency of the first line(lowest frequency line) in the current(has been considered) mutiple lines"
 say "[3]LineNumber: The number of lines in the current multiple lines"
-say "[4]BaseSigma: Sigma on base"
-say "[5]LineSigma: Sigma on line"
-say "[6]T_ant*Tau: p1."
-say "[7]T_ant*Tau_Err: Error of p1"
-say "[8]Vlsr: p2. The velocity of the reference component (i.e. the one with v i = 0)"
-say "[9]Vlsr_Err: Error of p2"
-say "[10]Delta_V: p3. The common FWHM of all components"
-say "[11]Delta_V_Err: Error of p3"
-say "[12]Tau_main: p4. Equals the sum of all centerline opacities(while intensity is normalized)"
-say "[13]Tau_main_Err: Error of p4"
-say "[14]T_ex: The excitation temperature calculated by p1, p4, F_eff, B_eff and T_bkg"
-say "[15]T_ex_Err: Error of T_ex"
+say "[4]BaseArea: Command 'base' area"
+say "[5]BaseSigma1: Command 'base' sigma"
+say "[6]BaseSigma2: Sigma on base (after hfs fitting)"
+say "[7]LineSigma: Sigma on line"
+say "[8]T_ant*Tau: p1."
+say "[9]T_ant*Tau_Err: Error of p1"
+say "[10]Vlsr: p2. The velocity of the reference component (i.e. the one with v i = 0)"
+say "[11]Vlsr_Err: Error of p2"
+say "[12]Delta_V: p3. The common FWHM of all components"
+say "[13]Delta_V_Err: Error of p3"
+say "[14]Tau_main: p4. Equals the sum of all centerline opacities(while intensity is normalized)"
+say "[15]Tau_main_Err: Error of p4"
+say "[16]T_ex: The excitation temperature calculated by p1, p4, F_eff, B_eff and T_bkg"
+say "[17]T_ex_Err: Error of T_ex"
+say "[18]Win_channel: window channel range for set win"
+say "[19]Base_channel: channel number for base "
+say "[20]Velo_resolution: Velocity resolution of the current spectrum"
+say "[21]Freq_resolution: Frequency resolution of the current spectrum"
 sic output
 !--------------------------------------------
 
@@ -226,7 +282,7 @@ exam T_ex_Err
 !-------output--------------
 sic dele hfs_'OutputLineName'_res.dat
 sic output hfs_'OutputLineName'_res.dat new
-say 'LineName' 'start_line_freq' 'LineNumber' 'R%HEAD%NH3%BNH3' 'R%HEAD%NH3%RNH3' 'R%HEAD%NH3%NNH3[1]' 'R%HEAD%NH3%ENH3[1]' 'R%HEAD%NH3%NNH3[2]' 'R%HEAD%NH3%ENH3[2]' 'R%HEAD%NH3%NNH3[3]' 'R%HEAD%NH3%ENH3[3]' 'R%HEAD%NH3%NNH3[4]' 'R%HEAD%NH3%ENH3[4]' 'T_ex' 'T_ex_Err'
+say 'LineName' 'start_line_freq' 'LineNumber' 'R%HEAD%BAS%AIRE' 'R%HEAD%BAS%SIGFI' 'R%HEAD%NH3%BNH3' 'R%HEAD%NH3%RNH3' 'R%HEAD%NH3%NNH3[1]' 'R%HEAD%NH3%ENH3[1]' 'R%HEAD%NH3%NNH3[2]' 'R%HEAD%NH3%ENH3[2]' 'R%HEAD%NH3%NNH3[3]' 'R%HEAD%NH3%ENH3[3]' 'R%HEAD%NH3%NNH3[4]' 'R%HEAD%NH3%ENH3[4]' 'T_ex' 'T_ex_Err' 'win_channel' 'base_channel' 'R%HEAD%SPE%VRES' 'R%HEAD%SPE%FRES'
 sic output
 
 sic dir ..
