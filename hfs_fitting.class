@@ -7,8 +7,6 @@
 !REQUIRE: 'LineName'.dat are in JPL format.
 !REQUIRE: FILE IN , GET and PLOT before this procedure.
 
-!Warning: You should change the Beff in different conditions(e.g. 3 mm or 2 mm)
-
 !Problem: can only be useful when set the ref line the strongest line. I do not know why.
 
 !Edit by Yichen Sun
