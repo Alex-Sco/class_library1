@@ -1,0 +1,100 @@
+!@generate_data_dat.class
+
+!generate data dat for hfs fitting outside class
+
+!----------------------------------------------------
+
+define char*100 LineName
+define int nl
+
+let LineName &1
+
+!------------read parameters in hfs_space------------
+sic mkdir hfs_space
+sic dir hfs_space
+sic dele 'LineName'.dat
+
+$pwd
+sic copy \home/alex/Working/Radio/GILDAS_workspace/LINE/'LineName'.dat .
+
+
+compute nl lines 'LineName'.dat
+
+exam nl
+
+define double Freqls[nl]
+
+accept Freqls /column 'LineName'.dat
+
+exam Freqls
+
+!----------------------------------------
+define double start_line_freq
+define int LineNumber
+
+let start_line_freq &2
+let LineNumber &3
+
+define int start_number
+
+for i 1 to nl
+   if ('Freqls[i]'.ge.'start_line_freq-0.0000005')
+   say 'Freqls[i]' 'start_line_freq'
+   let start_number i
+   break
+   end if
+next i
+
+exam start_number
+
+define double velo_shift['LineNumber']
+
+define int ref_line_number
+say "Set your reference line for HFS. Please input the line number of current several lines."
+say "(From lower freq to higher. Not the number in the datfile!)"
+let ref_line_number &4
+
+for i 1 to LineNumber
+   let velo_shift[i] (Freqls['i+start_number-1']-Freqls['start_number+ref_line_number-1'])*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES
+next i
+
+exam velo_shift
+!-------------------------------------------
+
+modi freq Freqls['start_number+ref_line_number-1']
+
+define double LineWidth
+say "input line window width "
+let LineWidth &5
+
+set unit v f
+set mo x 'R%HEAD%SPE%VOFF+velo_shift[LineNumber]'-'LineWidth*(LineNumber+2.5)' 'R%HEAD%SPE%VOFF+velo_shift[1]'+'LineWidth*(LineNumber+2.5)'
+
+pl
+
+
+!----------------------------------------
+sic mkdir hfs
+sic dir hfs
+
+sic dele hfs_'LineName'.dat
+sic output hfs_'LineName'.dat new
+
+for i 1 to CHANNELS
+   if (rx[i].ge.USER_XMIN).and.(rx[i].le.USER_XMAX)
+      say 'rx[i]' 'ry[i]'
+   end if 
+next i
+
+sic output 
+!------------------
+
+sic dir ../..
+
+
+
+
+
+
+
+
