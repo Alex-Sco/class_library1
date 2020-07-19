@@ -1,0 +1,69 @@
+!@simple_lines_fitting.class
+!
+!simple line fitting 
+!Edit by Yichen Sun
+!2020.07.19
+!
+!--------------
+
+pl
+
+define double freq 
+define double width   !window width
+
+let freq &1
+let width &2
+
+define char*200 outputflag 
+
+if PRO%NARG.ge.3 then
+let outputflag &3
+end if
+
+set unit v f
+modi freq 'freq'
+
+set mo x 'velocity-30' 'velocity+30'
+set win 'velocity-width' 'velocity+width'
+
+draw win
+base /pl
+
+pl
+draw win
+base /pl
+min
+
+vis /pen 3
+
+define int win_channel
+define int base_channel
+
+let win_channel 'abs(2*width/velo_step)'
+let base_channel 'abs((user_xmax-user_xmin)/velo_step-win_channel)'
+
+exam win_channel
+exam base_channel
+say 'R%HEAD%BAS%AIRE' 'R%HEAD%BAS%SIGFI' 'win_channel' 'base_channel'
+
+if (outputflag.eq."output").or.(outputflag.eq."Output").or.(outputflag.eq."o")
+$pwd
+define char*200 linename
+let linename &4 
+g\draw text 1 14 halfwinwidth='width'
+g\draw text 10 14 'linename'
+hardcopy 'linename'.eps /device eps /overwrite
+hardcopy 'linename'.pdf /device pdf /overwrite
+sic dele sim_fit_'linename'.dat
+sic output sim_fit_'linename'.dat new
+say 'R%HEAD%BAS%AIRE' 'R%HEAD%BAS%SIGFI' 'win_channel' 'base_channel' 'velo_step'
+sic output
+end if
+
+
+
+
+
+
+
+
