@@ -47,7 +47,7 @@ exam base_channel
 say 'R%HEAD%BAS%AIRE' 'R%HEAD%BAS%SIGFI' 'win_channel' 'base_channel'
 
 if (outputflag.eq."output").or.(outputflag.eq."Output").or.(outputflag.eq."o")
-$pwd
+system "pwd"
 define char*200 linename
 let linename &4 
 g\draw text 1 14 halfwinwidth='width'

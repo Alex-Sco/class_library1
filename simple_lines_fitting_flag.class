@@ -1,0 +1,193 @@
+!@simple_lines_fitting_flag.class
+!
+!simple line fitting 
+!Edit by Yichen Sun
+!2020.07.19
+
+
+!2022.07.06
+!Try to deal with special situation:  Flag the absorption features and cancel the corresponding window channels
+
+!--------------
+
+pl
+
+define double freq 
+define double width   !window width
+
+
+
+let freq &1
+let width &2
+
+
+!--output file control---
+define char*200 outputflag 
+
+if PRO%NARG.ge.3 then
+let outputflag &3
+end if
+!----------------------
+
+set unit v f
+modi freq 'freq'
+
+set mo x 'velocity-40' 'velocity+40'
+set win 'velocity-width' 'velocity+width'
+
+draw win
+base /pl
+
+pl
+draw win
+base /pl
+
+
+!----set flag wins------
+
+say "Now set flag wins: DO NOT set the line win!"
+
+pl
+
+set win
+pl
+draw win
+base 1 /pl
+
+
+say "Now show the current windows"
+draw win
+sic wait 2
+
+
+define double flag_winarray['2*R%HEAD%BAS%NWIND+1']
+define double flag_range['R%HEAD%BAS%NWIND']
+
+
+let flag_winarray[1] 'R%HEAD%BAS%NWIND'
+exam flag_winarray[1]
+exam flag_winarray
+exam R%HEAD%BAS%W1
+exam R%HEAD%BAS%W2
+
+
+for i 1 to R%HEAD%BAS%NWIND
+   say 'i'
+   let flag_winarray['i*2'] 'R%HEAD%BAS%W1[i]'
+   let flag_winarray['i*2+1'] 'R%HEAD%BAS%W2[i]'
+   let flag_range['i'] 'abs(R%HEAD%BAS%W2[i]-R%HEAD%BAS%W1[i])'
+next i
+
+exam flag_winarray
+
+define double sum_flagRange
+define int flag_channel
+
+compute sum_flagRange sum flag_range
+let flag_channel 'sum_flagRange/velo_step'
+exam flag_channel
+
+!---do another base to assume that the base line is at the y=0 level---
+define int temp_winarray_dim
+let temp_winarray_dim '2*(flag_winarray[1]+1)+1'
+exam flag_winarray
+exam temp_winarray_dim
+
+
+define double temp_winarray['temp_winarray_dim']
+let temp_winarray[1] 'flag_winarray[1]+1'
+let temp_winarray[2] 'velocity-width'
+let temp_winarray[3] 'velocity+width'
+
+for i 2 to 'flag_winarray[1]+1'
+  let temp_winarray['i*2'] flag_winarray['(i-1)*2']
+  let temp_winarray['i*2+1'] flag_winarray['(i-1)*2+1']
+next i
+
+exam temp_winarray
+
+
+pl
+
+set win /var temp_winarray
+dra win
+base 1 /pl
+pl
+draw win
+say "show the current windows"
+pl
+base 1 /pl
+say "Ensure that the baseline at 0-level!"
+sic wait 5
+
+
+!----flag the win-----
+
+for i 1 to flag_winarray[1]
+    for t 1 to channels
+        if rx[t].ge.flag_winarray['i*2'].and.rx[t].le.flag_winarray['i*2+1']
+            let ry[t] 0
+        end if
+    next t
+next i
+
+pl
+sic wait 5
+
+!---re fit----
+set win 'velocity-width' 'velocity+width'
+draw win
+base /pl
+
+pl
+draw win
+base /pl
+min
+
+vis /pen 3
+
+
+
+define int win_channel
+define int base_channel
+
+
+let win_channel 'abs(2*width/velo_step)'
+let base_channel 'abs((user_xmax-user_xmin)/velo_step-win_channel-flag_channel)'
+
+exam win_channel
+exam base_channel
+
+
+define double realrms
+!the rms is calculated by sum((x-xi)**2)/N
+!the flag windows (ry.eq.0) are still calculated into rms during the base, so should be revised
+
+let realrms 'R%HEAD%BAS%SIGFI*sqrt(base_channel/(base_channel-flag_channel))'
+
+
+say 'R%HEAD%BAS%AIRE' 'realrms' 'win_channel' 'base_channel-flag_channel'
+
+
+!----output 
+if (outputflag.eq."output").or.(outputflag.eq."Output").or.(outputflag.eq."o")
+system "pwd"
+define char*200 linename
+let linename &4 
+g\draw text 1 14 halfwinwidth='width'
+g\draw text 10 14 'linename'
+hardcopy 'linename'.eps /device eps /overwrite
+hardcopy 'linename'.pdf /device pdf /overwrite
+sic dele sim_fit_'linename'.dat
+sic output sim_fit_'linename'.dat new
+say 'R%HEAD%BAS%AIRE' 'realrms' 'win_channel' 'base_channel-flag_channel' 'velo_step'
+sic output
+end if
+
+
+
+
+
+
+
+
