@@ -1,0 +1,331 @@
+!@multiple_lines_fitting_flag.class
+!AIM: try to do multiple lines more easily
+!AIM: try to optimize multiple lines fitting?
+
+!REQUIRE: an open spectrum file with the lines you want to fit in it.
+
+!Note: the lineWidth here is the 4 sigma value of gauss fitting function of the reference strong line(e.g. 13CO), windows are fixed to this width
+!And the lines initial FWHM here are fixed to FWHM of the strong line calculated by 4 sigma value. The initial temperature para is set as multiples of base sigma(current mod x range)
+
+!Edit by Yichen Sun
+!2020.04.07
+!2020.07.15 add fixed choice
+!2020.09.14 add clear header output 
+!--------------------------------------------------------------
+
+
+set mo a t
+pl
+
+define int lineNumber
+let lineNumber &1
+
+if 'lineNumber'.eq.1
+  say "Only for multiple lines(lineNumber>1)."
+  return err
+end if 
+
+define double Freqls['lineNumber']
+
+say "input line freq list: e.g. [freq1] [freq2] [freq3]"
+let Freqls &2
+
+define double lineWidth
+define char*100 lineName
+
+let lineWidth &3
+let lineName &4
+
+
+!--------let the reference freq the median of the lowest anf highest freqs and calculate line position in the velo axis in this reference----------
+
+define double center_freq
+let center_freq ('Freqls[1]'+'Freqls[lineNumber]')/2
+modi freq 'center_freq'
+
+
+set unit v f
+set mo x t
+!set mo x R%HEAD%SPE%VOFF+'(Freqls[lineNumber]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'-'lineWidth*(lineNumber+4)' R%HEAD%SPE%VOFF+'(Freqls[1]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'+'lineWidth*(lineNumber+4)'
+set mo x 'velocity-40' 'velocity+40'
+
+
+pl 
+
+define double WinArray['2*lineNumber+1']
+let WinArray[1] 'lineNumber'
+
+for i 1 to lineNumber
+  let WinArray['2*i'] 'R%HEAD%SPE%VOFF+(Freqls[i]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'-'lineWidth' 
+  let WinArray['2*i+1'] 'R%HEAD%SPE%VOFF+(Freqls[i]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'+'lineWidth'
+next i 
+
+set win /var WinArray
+!-----------------------
+
+base /pl
+
+pl
+
+!----set flag wins------
+
+say "Now set flag wins: DO NOT set the line win!"
+
+pl
+
+set win
+pl
+draw win
+base 1 /pl
+
+
+say "Now show the current windows"
+draw win
+sic wait 2
+
+
+define double flag_winarray['2*R%HEAD%BAS%NWIND+1']
+define double flag_range['R%HEAD%BAS%NWIND']
+
+
+let flag_winarray[1] 'R%HEAD%BAS%NWIND'
+exam flag_winarray[1]
+exam flag_winarray
+exam R%HEAD%BAS%W1
+exam R%HEAD%BAS%W2
+
+
+for i 1 to R%HEAD%BAS%NWIND
+   say 'i'
+   let flag_winarray['i*2'] 'R%HEAD%BAS%W1[i]'
+   let flag_winarray['i*2+1'] 'R%HEAD%BAS%W2[i]'
+   let flag_range['i'] 'abs(R%HEAD%BAS%W2[i]-R%HEAD%BAS%W1[i])'
+next i
+
+exam flag_winarray
+
+define double sum_flagRange
+define int flag_channel
+
+compute sum_flagRange sum flag_range
+let flag_channel 'sum_flagRange/abs(velo_step)'
+exam flag_channel
+
+!---do another base to assume that the base line is at the y=0 level---
+define int temp_winarray_dim
+let temp_winarray_dim '2*(flag_winarray[1]+Winarray[1])+1'
+
+exam temp_winarray_dim
+
+
+define double temp_winarray['temp_winarray_dim']
+
+let temp_winarray[1] 'flag_winarray[1]+Winarray[1]'
+
+for i 1 to 'Winarray[1]'
+   let temp_winarray['2*i'] Winarray['2*i']
+   let temp_winarray['2*i+1'] Winarray['2*i+1']
+next i
+
+
+for i 1 to 'flag_winarray[1]'
+  let temp_winarray['2*(Winarray[1]+i)'] flag_winarray['i*2']
+  let temp_winarray['2*(Winarray[1]+i)+1'] flag_winarray['i*2+1']
+next i
+
+exam temp_winarray
+
+
+pl
+
+set win /var temp_winarray
+dra win
+base 1 /pl
+pl
+draw win
+say "show the current windows"
+pl
+base 1 /pl
+say "Ensure that the baseline at 0-level!"
+sic wait 5
+
+!----flag the win-----
+
+for i 1 to flag_winarray[1]
+    for t 1 to channels
+        if rx[t].ge.flag_winarray['i*2'].and.rx[t].le.flag_winarray['i*2+1']
+            let ry[t] 0
+        end if
+    next t
+next i
+
+pl
+sic wait 5
+
+
+!----re fit----
+
+set win /var WinArray
+
+base /pl
+pl
+base /pl
+draw win
+
+
+
+!-------add Clear Headers choice here----------
+define char*100 ClearHeaderFlag
+say "Clear headers? Press 'y' or 'Y' if you want to."
+let ClearHeaderFlag &5
+
+
+if ClearHeaderFlag.eq."Y".or.ClearHeaderFlag.eq."y"
+  for item 1 to 5
+    clear segment
+  next item
+end if 
+
+base /pl
+draw win
+
+!--------calculate channel number for base----------
+!---
+define double win_range
+define double storing[100]
+let win_range 0
+
+say ""
+exam WinArray
+say ""
+
+for i 1 to lineNumber-1
+   if WinArray['2*i+3'].gt.WinArray['2*i'] 
+      let storing[i] abs(WinArray['2*i+3']-WinArray['2*i+1'])    !Note: because freq higher velo lower, win is actually reverse here
+      if 'i'.eq.'lineNumber-1'
+         let storing['i+1'] abs(WinArray['2*i+3']-WinArray['2*i+2'])
+      end if  
+   else
+      let storing[i] abs(WinArray['2*i+1']-WinArray['2*i'])
+      if 'i'.eq.'lineNumber-1'
+         let storing['i+1'] abs(WinArray['2*i+3']-WinArray['2*i+2'])       
+      end if
+   end if   
+next i
+
+for i 1 to 'lineNumber'
+  let win_range 'win_range'+storing[i]
+next i
+
+!exam storing
+say " "
+
+exam win_range
+define double win_channel
+let win_channel 'win_range/abs(R%HEAD%SPE%VRES)'
+exam win_channel
+!--
+
+define double base_channel
+
+let base_channel '(USER_XMAX-USER_XMIN-win_range)/abs(R%HEAD%SPE%VRES)'
+
+exam base_channel
+say ""
+
+!---
+define double realrms
+!the rms is calculated by sum((x-xi)**2)/N
+!the flag windows (ry.eq.0) are still calculated into rms during the base, so should be revised
+
+let realrms 'R%HEAD%BAS%SIGFI*sqrt(base_channel/(base_channel-flag_channel))'
+
+
+!--------------------------
+
+!--------------create dir temp_store in the local dir to instore fitting parameters there---------------
+sic mkdir temp_space
+sic dir temp_space
+
+!-------create a file storing fitting parameters for later multiple fitting----------
+
+say "-------------"
+say "Now type your fixed parameters choice. [Temperature] [Position] [Width(FWHM)]"
+say "0 is not fixed, while 1 is fixed"
+say "For example, '0 1 1' means free T and fixed positions and widths"
+define int fix[3]
+let fix &6
+
+say "------fix number------"
+say 'fix[1]' 'fix[2]' 'fix[3]'
+
+sic dele multiple_fit_par.dat
+sic output multiple_fit_par.dat new
+
+say 'lineNumber'
+for i 1 to 'lineNumber'
+  say 'fix[1]' '2.5*R%HEAD%BAS%SIGFI' 'fix[2]' 'R%HEAD%SPE%VOFF+(Freqls[i]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES' 'fix[3]' '2*sqrt(2*log(2))*(lineWidth/4)'
+next i
+
+!note : you can modify the initial temperature above to get a better fitting results, especially for some weak lines.
+
+sic output
+!----------------------
+
+!say "Now set lines!"
+!line 'lineNumber' 
+
+method gauss
+
+line /input multiple_fit_par.dat
+
+min
+!iterate
+vis /pen 3
+
+if ClearHeaderFlag.eq."Y".or.ClearHeaderFlag.eq."y"
+  sic mkdir clear_headers
+  sic dir clear_headers
+  g\draw text 2 12 'lineName'
+  g\draw text 21 12 'source'
+  hardcopy 'source'_'lineName'_fit_res_m.eps /overwrite
+  hardcopy 'source'_'lineName'_fit_res_m.pdf /device pdf /overwrite
+  sic dir ..
+else
+  g\draw text 2 14 halfWinWidth='lineWidth'
+  g\draw text 10 14 'lineName'
+
+  hardcopy NO0_'lineName'_fit_res_o.eps /overwrite
+  hardcopy NO0_'lineName'_fit_res_o.pdf /device pdf /overwrite
+end if
+
+sic dele multiple_res_'lineName'.dat
+sic output multiple_res_'lineName'.dat new
+
+for i 1 to R%HEAD%GAU%NLINE
+  define double temp1[4]
+  define double temp2[4]
+  for j 1 to 3
+     let temp1[j] R%HEAD%GAU%NFIT['j+3*(i-1)']
+     let temp2[j] R%HEAD%GAU%NERR['j+3*(i-1)']
+  next j
+  let temp1[4] 2*sqrt(log(2))*temp1[1]/(sqrt(pi)*temp1[3])
+  let temp2[4] 2*sqrt(log(2))/sqrt(pi)*sqrt((temp2[1]/temp1[3])**2+(temp1[1]*temp2[3]/(temp1[3])**2)**2)
+
+  say 'Freqls[i]' 'lineName' 'i' 'R%HEAD%BAS%AIRE' 'realrms' 'win_range' 'R%HEAD%GAU%SIGBA' 'R%HEAD%GAU%SIGRA' 'temp1[1]' 'temp2[1]' 'temp1[2]' 'temp2[2]' 'temp1[3]' 'temp2[3]' 'temp1[4]' 'temp2[4]' 'R%HEAD%SPE%VOFF' 'R%HEAD%SPE%VRES' 'R%HEAD%SPE%FRES' 'base_channel-flag_channel'
+  dele /var temp1
+  dele /var temp2
+next i
+
+sic output
+
+say "compare to 13-CO width:"
+say "13-CO:" 'Linewidth' 'lineName'":" 'R%HEAD%GAU%NFIT[3]*4/(2*sqrt(2*log(2)))'
+
+sic dir ..
+system "pwd"
+
+
+  
+
+
