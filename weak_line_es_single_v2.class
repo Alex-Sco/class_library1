@@ -1,0 +1,284 @@
+!weak_line_es_single_v2.class
+
+!AIM: estimate weak line level by area and output file for following procedures, e.g. stacking
+!just estimate the current spectra. 
+!REQUIRE: the spectra for estimate should be open and correspond to the line range
+!Edit by Yichen Sun
+!2020.07.04
+!
+!2022.03.15: v2: use the input velocity range
+!change the 'center freq' to the main component freq as the reference freq
+!2022.07.06
+!update the annoation section. The previous section causes the offset for the positions of line components
+!--------------------------------------------------------------------------------------------
+define char*100 LineName
+let LineName &1
+
+sic dele 'LineName'.dat
+system "pwd"
+sic copy \DATA1/yichen/class_source/LINE/'LineName'.dat .
+
+
+!---------get freq and intensity information----------------------
+define int n2
+
+compute n2 lines 'LineName'.dat /blank
+
+define double Freqlist[n2]
+define double lils[n2]
+accept Freqlist * lils /column 'LineName'.dat 
+
+exam Freqlist
+exam lils
+!-------------set the number of drawing lines, start line and reference (strongest) lines----------------
+define double start_line_freq 
+define int LineNumber 
+let start_line_freq &2
+let LineNumber &3
+
+define int start_number
+
+define double inten['LineNumber']
+
+
+for i 1 to n2
+   if ('Freqlist[i]'.ge.'start_line_freq-0.0000005')
+   say 'Freqlist[i]' 'start_line_freq'
+   let start_number i
+   break
+   end if
+next i
+
+exam start_number
+define int ref_line_number
+
+say "Set the strongest component"
+let ref_line_number &4
+
+!--------------get relatively intensity of lines for drawing------------------
+for i 1 to LineNumber
+    if (i.eq.'ref_line_number')  !select no.1 as the strongest component
+       let inten[i] 1
+    else 
+       let inten[i] (10**lils['i-1+start_number'])/(10**lils['ref_line_number-1+start_number'])  
+    end if
+next i
+
+
+exam inten  
+!----------------prepare ref freq and win array------------
+
+define double center_freq
+!let center_freq (FreqList['start_number']+FreqList['start_number+LineNumber-1'])/2
+let center_freq FreqList['ref_line_number-1+start_number']
+exam center_freq
+
+
+
+define double WinArray['2*LineNumber+1']
+let WinArray[1] 'LineNumber'
+
+!---------------prepare for judge the opened file-----------
+
+
+!-----------------------------------------------------------
+
+
+
+!---------------prepare for win_channel_calculation--------
+define double win_range
+
+define double WinWidth
+let WinWidth &5
+
+!---------velocity range----------
+define double vrange[2]
+let vrange &6
+
+exam vrange
+
+
+!---------------prepare .dat file for output---------------
+define char*200 OutputLineName
+let OutputLineName &7
+sic mkdir weak
+sic dir weak
+sic dele weak_'OutputLineName'_estimate_'LineNumber'.dat
+sic output weak_'OutputLineName'_estimate_'LineNumber'.dat new
+sic output
+sic dir ..
+!-----------------------------------------------------------
+
+
+
+
+!---------------enter source's dir and open files----------
+     modi freq 'center_freq'
+     set unit v f
+     set mo x t
+     set mo y t
+     !set mo x R%HEAD%SPE%VOFF+(FreqList['LineNumber+start_number-1']-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES-'WinWidth*(LineNumber+4)' R%HEAD%SPE%VOFF+'(FreqList[start_number]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'+'WinWidth*(LineNumber+4)'
+     !set mo x R%HEAD%SPE%VOFF+(FreqList['LineNumber+start_number-1']-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES-150 R%HEAD%SPE%VOFF+'(FreqList[start_number]-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES'+150
+     set mo x 'vrange[1]' 'vrange[2]'
+     pl
+     !-------------------------set win----------------------------
+     for j 1 to 'LineNumber'
+        let WinArray['2*j'] R%HEAD%SPE%VOFF+(FreqList['j-1+start_number']-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES-'WinWidth'
+        let WinArray['2*j+1'] R%HEAD%SPE%VOFF+(FreqList['j-1+start_number']-center_freq)*R%HEAD%SPE%VRES/R%HEAD%SPE%FRES+'WinWidth'
+     next j
+
+     set win /var WinArray
+     !----------------------------------------
+     !--------------cal win channel and base channel---------------
+     let win_range 0
+     define double storing[100]
+     say ""
+     exam WinArray
+     say ""
+
+     for k 1 to LineNumber-1
+        if WinArray['2*k+3'].gt.WinArray['2*k']
+           let storing[k] abs(WinArray['2*k+3']-WinArray['2*k+1'])    !Note: because freq higher velo lower, win is actually reverse here
+           if k.eq.'LineNumber-1'
+              let storing['k+1'] abs(WinArray['2*k+3']-WinArray['2*k+2'])
+           end if
+        else
+           let storing[k] abs(WinArray['2*k+1']-WinArray['2*k'])
+           if k.eq.'LineNumber-1'
+              let storing['k+1'] abs(WinArray['2*k+3']-WinArray['2*k+2'])
+           end if
+        end if
+     next k
+
+     for k 1 to 'LineNumber'
+        let win_range 'win_range'+storing[k]
+     next k 
+
+     if LineNumber.eq.1
+        let win_range '2*WinWidth'
+     end if
+
+     !exam storing
+     say " "
+
+     exam win_range
+     define int win_channel
+     let win_channel 'win_range/abs(R%HEAD%SPE%VRES)'
+     exam win_channel
+     define int base_channel
+     let base_channel '(USER_XMAX-USER_XMIN-win_range)/abs(R%HEAD%SPE%VRES)'
+     exam base_channel
+
+     dele /var storing
+     !-------------------
+     !here clear the header
+     
+     
+     base 
+     pl
+
+     for c 1 to 5
+       clear segment
+     next c
+     sic wait 1
+     draw win
+     base /pl
+
+     sic wait 1
+
+     
+
+
+     !-----------cal sigma of area---------
+     define double Area3Sigma
+     define double deltaA
+     
+     !let Area3Sigma 'sqrt(win_channel)*abs(R%HEAD%SPE%VRES)*sigma*3'
+     let Area3Sigma 'sqrt(win_channel*(1+win_channel/base_channel))*abs(R%HEAD%SPE%VRES)*sigma*3'
+     let deltaA 'R%HEAD%BAS%AIRE-Area3Sigma'
+     
+     !------------denotation---------------
+     !-------denote 3 sigma & 4 sigma level for T-----------
+     g\pen /colour 3
+     g\draw relocate rx[1] 3*sigma /user
+     g\draw line rx[channels] 3*sigma /user
+     g\draw relocate rx[1] 4*sigma /user
+     g\draw line rx[channels] 4*sigma /user   !draw 3sigma and 4sigma lines
+     !-----------denote text---------------
+     g\pen /colour 0
+     g\draw text 1 14 halfLineWidth='WinWidth'
+     g\draw text 20 14 sigma='sigma'
+     g\draw text 10 14 'OutputLineName'
+     g\pen /colour 3
+     g\pen /weight 2
+     g\draw text 2 15 Area='R%HEAD%BAS%AIRE'
+     g\draw text 12 15 Area3Sigma='Area3Sigma'
+     if deltaA.ge.0
+        g\draw text 22 15 detected
+     else 
+        g\draw text 22 15 undetected
+     end if
+     !-----------denote lines showing relative indensities of multiple lines components----------
+     define int ref_channel
+     let ref_channel abs(velocity+(FreqList['start_number+ref_line_number-1']-center_freq)*velo_step/freq_step-rx[1])/abs(velo_step)
+     exam ref_channel
+
+     define double main_velo   !the velocity of the main component
+     let main_velo velocity+(FreqList['start_number+ref_line_number-1']-center_freq)*velo_step/freq_step
+
+     say "!!!!!!!reference velocity:" 'rx[ref_channel]'
+     say "!----!:" 'main_velo'
+     g\pen /colour 1
+     g\pen /weight 4
+     for j 1 to 'LineNumber'
+        g\draw relocate main_velo 'USER_YMIN+(USER_YMAX-USER_YMIN)*0.01' /user
+        define double comp_velo
+        let comp_velo main_velo+(FreqList['j-1+start_number']-FreqList['start_number+ref_line_number-1'])*velo_step/freq_step
+        g\draw line comp_velo 'USER_YMIN+(USER_YMAX-USER_YMIN)*0.01' /user 
+        g\draw relocate comp_velo 'USER_YMIN+(USER_YMAX-USER_YMIN)*0.01' /user
+        g\draw line comp_velo 'USER_YMIN+(USER_YMAX-USER_YMIN)*0.5*Inten[j]' /user
+        dele /var comp_velo
+     next j
+     g\pen /colour 0
+     g\pen /weight 1
+     sic dir weak
+     hardcopy 'OutputLineName'.eps /overwrite
+     hardcopy 'OutputLineName' /device pdf /overwrite
+ 
+     !----------------------------
+     !----------------calculate estimated indensity-------------
+     
+     define double AllInten
+     define double IntenS    
+
+     let IntenS '3*sigma*sqrt(2*pi)*WinWidth/4'  !assume the strongest component as a guass profile
+     let AllInten 0
+     for k 1 to LineNumber
+         define double temp
+         let temp 'IntenS*Inten[k]'
+         let AllInten 'AllInten+temp'
+         dele /var temp
+     next k
+      
+     exam AllInten
+     !----------------output--------------------
+     sic output weak_'OutputLineName'_estimate_'LineNumber'.dat a
+     say 'source' 'WinWidth' 'win_channel' 'base_channel' 'R%HEAD%SPE%VRES' 'AllInten' '3*sigma' 'R%HEAD%BAS%AIRE' 'Area3Sigma'
+     sic output
+     
+     dele /var ref_channel
+     dele /var win_channel
+     dele /var base_channel
+     dele /var Area3Sigma
+     dele /var deltaA
+     dele /var AllInten
+     dele /var IntenS
+    
+     sic dir ..
+     say " "
+
+ 
+
+
+
+
