@@ -1,0 +1,59 @@
+!show_line_info.class
+
+
+!show the frequency and log intensity information of the lines instored in the /LINE directory
+!2022.07.09
+!Yichen Sun
+!-----------------------------
+
+
+
+define char*200 dir
+let dir "/DATA1/yichen/class_source"
+
+
+define int n1
+compute n1 lines 'dir'/LINE/all_lines.dat
+
+
+
+define char*100 all_lines['n1']
+
+accept all_lines /column 'dir'/LINE/all_lines.dat
+
+exam all_lines
+
+say "----------------"
+say "select the lines"
+
+define char*100 select_line
+let select_line &1
+
+define int n2
+compute n2 lines 'dir'/LINE/'select_line'.dat  /blank
+
+define char*100 freq[n2]  !only for print directly.
+define char*100 freq_err[n2]
+define char*100 loginten[n2]
+define char*100 inten[n2]
+
+
+if select_line.eq."C-17-O_Lovas"
+   accept freq freq_err inten /column 'dir'/LINE/'select_line'.dat 
+   say "freq" "freq_err" "intensity"
+
+   for i 1 to n2
+      say 'freq[i]' 'freq_err[i]' 'inten[i]'
+   next i
+
+else 
+   accept freq freq_err loginten /column 'dir'/LINE/'select_line'.dat 
+   say "freq" "freq_err" "log_intensity"
+   for i 1 to n2
+      say 'freq[i]' 'freq_err[i]' 'loginten[i]'
+   next i
+
+end if  
+
+
+
